@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NeoWorms</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #16325c;
+        font: 13px/1.5 system-ui, sans-serif;
+      }
+      #game {
+        position: fixed;
+        inset: 0;
+      }
+      #hud {
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        pointer-events: none;
+        color: #fff;
+      }
+      #hud > div {
+        background: rgba(10, 20, 40, 0.72);
+        border-radius: 8px;
+        padding: 8px 12px;
+      }
+      #hud-info {
+        white-space: pre;
+        font-weight: 600;
+      }
+      #hud-help table {
+        border-collapse: collapse;
+      }
+      #hud-help td {
+        padding: 1px 10px 1px 0;
+      }
+      #hud-help td:first-child {
+        color: #ffd23f;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game"></div>
+    <div id="hud">
+      <div id="hud-info"></div>
+      <div id="hud-help">
+        <table>
+          <tr><td>← →</td><td>walk</td></tr>
+          <tr><td>↑ ↓</td><td>aim</td></tr>
+          <tr><td>Enter</td><td>jump</td></tr>
+          <tr><td>Backspace</td><td>backflip</td></tr>
+          <tr><td>Tab</td><td>next worm</td></tr>
+          <tr><td>Left click</td><td>explosion</td></tr>
+          <tr><td>Wheel</td><td>zoom</td></tr>
+          <tr><td>Right drag</td><td>pan (or Shift + drag)</td></tr>
+          <tr><td>R / M</td><td>new map / next map type</td></tr>
+          <tr><td>H</td><td>hide this help</td></tr>
+        </table>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
