@@ -2,3 +2,6 @@ node_modules
 dist
 .DS_Store
 *.log
+
+# Worms Revolution assets extracted from a personal copy: personal use only (Team17's), never commit.
+maps/wr/

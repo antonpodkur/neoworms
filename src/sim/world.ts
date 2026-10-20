@@ -1,5 +1,5 @@
 import { PHYS } from './constants';
-import { findSpawnPoints, generateMap, type MapPreset } from './mapgen';
+import { findSpawnPoints, type GeneratedMap } from './mapgen';
 import { mulberry32 } from './rng';
 import type { Terrain } from './terrain';
 import { createWorm, NO_INPUT, stepWorm, type Worm, type WormInput } from './worm';
@@ -56,12 +56,14 @@ export class World {
     }
   }
 
-  /** Blows a hole in the terrain and damages and throws worms in range. */
-  explode(x: number, y: number, radius: number, damage: number): void {
+  /**
+   * Blows a hole of `radius` in the terrain. Worms within `reach` take damage and get thrown,
+   * both fading out with distance. (In Worms Revolution the reach is ~1.8x the crater.)
+   */
+  explode(x: number, y: number, radius: number, damage: number, reach = radius + PHYS.wormRadius): void {
     this.terrain.carve(x, y, radius);
     this.events.push({ type: 'carve', x, y, r: radius }, { type: 'explosion', x, y, r: radius });
 
-    const reach = radius + PHYS.wormRadius;
     for (const worm of this.worms) {
       if (!worm.alive) continue;
       const dx = worm.x - x;
@@ -76,6 +78,9 @@ export class World {
       worm.vy += uy * PHYS.blastKnockback * power - PHYS.blastLift * power;
       worm.grounded = false;
       worm.knocked = true;
+      worm.afterTouch = 0;
+      worm.pendingJump = null;
+      worm.rope = null; // blasts knock worms off their rope
       this.damage(worm, Math.max(1, Math.round(damage * power)));
     }
   }
@@ -112,9 +117,9 @@ export class World {
   }
 }
 
-/** Generates a map and places every team's worms on it, alternating teams across the map. */
-export function createMatch(preset: MapPreset, seed: number, teams: TeamSetup[]): World {
-  const { terrain, waterLevel } = generateMap(preset, seed);
+/** Places every team's worms on the map, alternating teams across it. */
+export function createMatch(map: GeneratedMap, seed: number, teams: TeamSetup[]): World {
+  const { terrain, waterLevel } = map;
   const world = new World(terrain, waterLevel);
   const rng = mulberry32(seed ^ 0x5eed);
 

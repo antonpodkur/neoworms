@@ -1,5 +1,8 @@
 import Phaser from 'phaser';
 import { GameScene } from './game/GameScene';
+import { createTuningPanel } from './game/TuningPanel';
+
+createTuningPanel();
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,

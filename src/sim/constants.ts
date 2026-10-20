@@ -3,38 +3,85 @@ export const TICK_RATE = 60;
 export const DT = 1 / TICK_RATE;
 
 /**
- * Physics tuning. Units are pixels and seconds.
- * Kept as a plain mutable object so a live tuning panel can tweak it later.
+ * Physics tuning defaults. Units are pixels and seconds; a worm is 16px tall (2 × radius).
+ *
+ * Movement is modelled on Worms Revolution, converted to worm heights so it doesn't depend
+ * on its internal units: gravity and the forward jump were measured from the game's movement
+ * tutorial video, and the rest follows the ratios in its Soldier class data (jump vs.
+ * backflip vs. walk, 70° slope limit, fall damage capped at 25).
  */
-export const PHYS = {
-  gravity: 600,
-  maxFallSpeed: 1000,
+const defaults = {
+  /** ~25 worm heights/s², measured from Worms Revolution footage. */
+  gravity: 395,
+  maxFallSpeed: 900,
 
-  wormRadius: 7,
-  walkSpeed: 55,
+  wormRadius: 8,
+  /** ~1.3 worm heights/s, as in Worms Revolution. */
+  walkSpeed: 21,
   /** Pixels a worm may step up per pixel walked; sets the steepest walkable slope (~70°). */
   maxClimb: 3,
   /** Pixels a worm follows the ground down per pixel walked before it starts falling. */
   maxSnapDown: 3,
-  jump: { vx: 150, vy: -210 },
-  /** vx is relative to facing, so negative means backwards. */
-  backflip: { vx: -45, vy: -330 },
+  /** Forward jump: rises ~1.7 worm heights. */
+  jumpVx: 94,
+  jumpVy: -154,
+  /** Relative to facing, so negative means backwards. Rises ~3.2 worm heights. */
+  backflipVx: -30,
+  backflipVy: -212,
+  /** Crouch before leaving the ground; a second Jump press within it turns the jump into a flip. */
+  jumpDelay: 0.3,
+  /** Steering in the air while holding ← →, as a fraction of gravity ("after-touch"). */
+  jumpAfterTouch: 0.1,
+  backflipAfterTouch: 0.28,
   aimSpeed: 1.8,
 
-  /** Landing faster than this hurts (roughly a 90px drop). */
-  safeLandingSpeed: 330,
-  fallDamagePerSpeed: 0.1,
+  /** Landings slower than this are free (a drop of ~5.5 worm heights). */
+  safeLandingSpeed: 264,
+  /** Fall damage grows with landing speed up to the cap, reached at this speed. */
+  maxDamageLandingSpeed: 763,
+  maxFallDamage: 25,
 
   /** A surface counts as floor when its normal points up more steeply than this. */
   floorNormalY: -0.55,
   wallBounce: 0.3,
   /** Worms thrown by explosions bounce and slide before they settle. */
-  knockBounce: 0.35,
-  knockFriction: 0.7,
-  knockLandSpeed: 140,
+  knockBounce: 0.5,
+  knockFriction: 0.75,
+  knockLandSpeed: 120,
   /** Below this speed an airborne worm that touches ground just settles. */
-  settleSpeed: 40,
+  settleSpeed: 35,
 
-  blastKnockback: 450,
-  blastLift: 120,
+  blastKnockback: 365,
+  blastLift: 95,
+
+  /** Total rope length, including the parts bent around corners. */
+  ropeMaxLength: 380,
+  ropeMinLength: 16,
+  ropeShotSpeed: 2400,
+  ropeReelSpeed: 160,
+  /** Sideways push while swinging (← →). */
+  ropeSwingAccel: 170,
+  ropeMaxSpeed: 800,
+  /**
+   * How much reeling in speeds up the swing: 0 keeps the speed, 1 is real physics
+   * (angular momentum is conserved, like a skater pulling in their arms).
+   */
+  ropeReelMomentum: 0.5,
+  /** Share of speed kept when a swinging worm hits a wall. */
+  ropeBounce: 0.3,
+  /** A real rope can go slack (worm falls when above the anchor); off makes it a rigid rod. */
+  ropeCanGoSlack: true,
+  /** Upward hop when the rope hooks in while standing, so the worm lifts off (1.5× a jump). */
+  ropeAutoHop: 231,
 };
+
+export type Physics = typeof defaults;
+
+export const DEFAULT_PHYS: Readonly<Physics> = Object.freeze({ ...defaults });
+
+/** Live physics values. A plain mutable object so the tuning panel can tweak it. */
+export const PHYS: Physics = { ...defaults };
+
+export function resetPhys(): void {
+  Object.assign(PHYS, DEFAULT_PHYS);
+}

@@ -1,14 +1,18 @@
-import { DT, PHYS } from './constants';
-import type { Terrain } from './terrain';
+import { DT, PHYS, TICK_RATE } from './constants';
+import { bounceOff, moveDisc, pushOut } from './physics';
+import { advanceHook, fireOrRelease, swingOnRope, type Rope } from './rope';
+import type { Terrain, Vec2 } from './terrain';
 
 export interface WormInput {
   left: boolean;
   right: boolean;
   up: boolean;
   down: boolean;
-  /** True only on the tick the key was pressed. */
+  /** True only on the tick the key was pressed. A second jump during the crouch makes a flip. */
   jump: boolean;
+  /** Shortcut straight to a backflip. */
   backflip: boolean;
+  fire: boolean;
 }
 
 export const NO_INPUT: WormInput = {
@@ -18,6 +22,7 @@ export const NO_INPUT: WormInput = {
   down: false,
   jump: false,
   backflip: false,
+  fire: false,
 };
 
 export interface Worm {
@@ -39,6 +44,11 @@ export interface Worm {
   knocked: boolean;
   /** Sub-pixel walking distance carried between ticks. */
   walkProgress: number;
+  /** A jump being wound up (the worm crouches first): what it becomes and ticks until take-off. */
+  pendingJump: { kind: 'jump' | 'backflip'; ticksLeft: number } | null;
+  /** How strongly ← → steer this flight, as a fraction of gravity; 0 when it can't be steered. */
+  afterTouch: number;
+  rope: Rope | null;
   hp: number;
   alive: boolean;
 }
@@ -59,6 +69,9 @@ export function createWorm(id: number, name: string, team: number, x: number, y:
     grounded: false,
     knocked: false,
     walkProgress: 0,
+    pendingJump: null,
+    afterTouch: 0,
+    rope: null,
     hp,
     alive: true,
   };
@@ -66,29 +79,56 @@ export function createWorm(id: number, name: string, team: number, x: number, y:
 
 /** Advances one worm by one tick. Returns fall damage taken on landing (0 if none). */
 export function stepWorm(worm: Worm, input: WormInput, terrain: Terrain): number {
+  if (input.fire) fireOrRelease(worm);
+  advanceHook(worm, terrain);
+  if (worm.rope?.phase === 'attached') {
+    swingOnRope(worm, worm.rope, input, terrain);
+    return 0;
+  }
+
   if (input.up) worm.aim = Math.min(Math.PI / 2, worm.aim + PHYS.aimSpeed * DT);
   if (input.down) worm.aim = Math.max(-Math.PI / 2, worm.aim - PHYS.aimSpeed * DT);
 
   if (worm.grounded) {
-    if (input.jump) launch(worm, PHYS.jump.vx, PHYS.jump.vy);
-    else if (input.backflip) launch(worm, PHYS.backflip.vx, PHYS.backflip.vy);
+    if (input.backflip) queueJump(worm, 'backflip');
+    else if (input.jump) queueJump(worm, 'jump');
+
+    if (worm.pendingJump) crouch(worm, input);
     else if (input.left !== input.right) walk(worm, input.left ? -1 : 1, terrain);
     else worm.walkProgress = 0;
 
     // Ground can vanish under a worm (explosions), so re-check support every tick.
     if (worm.grounded && terrain.discFree(worm.x, worm.y + 1, PHYS.wormRadius)) {
       worm.grounded = false;
+      worm.pendingJump = null;
     }
   }
 
-  return worm.grounded ? 0 : fly(worm, terrain);
+  return worm.grounded ? 0 : fly(worm, input, terrain);
 }
 
-function launch(worm: Worm, vx: number, vy: number): void {
+/** The first Jump press starts a crouch; another press during it turns the jump into a flip. */
+function queueJump(worm: Worm, kind: 'jump' | 'backflip'): void {
+  if (worm.pendingJump) worm.pendingJump.kind = 'backflip';
+  else worm.pendingJump = { kind, ticksLeft: Math.round(PHYS.jumpDelay * TICK_RATE) };
+}
+
+/** Winds up a jump: ← → can still turn the worm around, and it takes off when the crouch ends. */
+function crouch(worm: Worm, input: WormInput): void {
+  const pending = worm.pendingJump!;
+  if (input.left !== input.right) worm.facing = input.left ? -1 : 1;
+  worm.walkProgress = 0;
+  if (--pending.ticksLeft > 0) return;
+  worm.pendingJump = null;
+  if (pending.kind === 'jump') launch(worm, PHYS.jumpVx, PHYS.jumpVy, PHYS.jumpAfterTouch);
+  else launch(worm, PHYS.backflipVx, PHYS.backflipVy, PHYS.backflipAfterTouch);
+}
+
+function launch(worm: Worm, vx: number, vy: number, afterTouch: number): void {
   worm.vx = worm.facing * vx;
   worm.vy = vy;
   worm.grounded = false;
-  worm.walkProgress = 0;
+  worm.afterTouch = afterTouch;
 }
 
 function walk(worm: Worm, dir: 1 | -1, terrain: Terrain): void {
@@ -125,24 +165,17 @@ function stepSideways(worm: Worm, dir: 1 | -1, terrain: Terrain): boolean {
   return false;
 }
 
-/** Ballistic movement in half-pixel sub-steps so fast worms can't tunnel through thin ground. */
-function fly(worm: Worm, terrain: Terrain): number {
+function fly(worm: Worm, input: WormInput, terrain: Terrain): number {
   worm.vy = Math.min(worm.vy + PHYS.gravity * DT, PHYS.maxFallSpeed);
-  pushOut(worm, terrain);
-
-  const steps = Math.max(1, Math.ceil((Math.hypot(worm.vx, worm.vy) * DT) / 0.5));
-  const sx = (worm.vx * DT) / steps;
-  const sy = (worm.vy * DT) / steps;
-  for (let i = 0; i < steps; i++) {
-    if (!terrain.discFree(worm.x + sx, worm.y + sy, PHYS.wormRadius)) return collide(worm, terrain);
-    worm.x += sx;
-    worm.y += sy;
+  if (worm.afterTouch > 0 && input.left !== input.right) {
+    worm.vx += (input.left ? -1 : 1) * worm.afterTouch * PHYS.gravity * DT;
   }
-  return 0;
+  pushOut(worm, PHYS.wormRadius, terrain);
+  const n = moveDisc(worm, PHYS.wormRadius, terrain);
+  return n ? collide(worm, n) : 0;
 }
 
-function collide(worm: Worm, terrain: Terrain): number {
-  const n = terrain.normalAt(worm.x, worm.y, PHYS.wormRadius + 2) ?? { x: 0, y: -1 };
+function collide(worm: Worm, n: Vec2): number {
   const vn = worm.vx * n.x + worm.vy * n.y; // negative when moving into the surface
   const isFloor = n.y < PHYS.floorNormalY;
 
@@ -153,14 +186,8 @@ function collide(worm: Worm, terrain: Terrain): number {
     return damage;
   }
 
-  if (vn < 0) {
-    const bounce = worm.knocked ? PHYS.knockBounce : PHYS.wallBounce;
-    const friction = worm.knocked ? PHYS.knockFriction : 1;
-    const tx = worm.vx - vn * n.x;
-    const ty = worm.vy - vn * n.y;
-    worm.vx = tx * friction - vn * bounce * n.x;
-    worm.vy = ty * friction - vn * bounce * n.y;
-  }
+  if (worm.knocked) bounceOff(worm, n, PHYS.knockBounce, PHYS.knockFriction);
+  else bounceOff(worm, n, PHYS.wallBounce);
   // Wedged in a crevice or barely moving: settle so the player can walk or jump out.
   if (n.y < 0 && Math.hypot(worm.vx, worm.vy) < PHYS.settleSpeed) land(worm);
   return 0;
@@ -171,19 +198,11 @@ function land(worm: Worm): void {
   worm.vy = 0;
   worm.grounded = true;
   worm.knocked = false;
+  worm.afterTouch = 0;
 }
 
+/** Grows from nothing at the safe landing speed up to the cap. */
 function fallDamage(impactSpeed: number): number {
-  if (impactSpeed <= PHYS.safeLandingSpeed) return 0;
-  return Math.round((impactSpeed - PHYS.safeLandingSpeed) * PHYS.fallDamagePerSpeed);
-}
-
-/** Nudges a worm that ended up inside ground back out toward open air. */
-function pushOut(worm: Worm, terrain: Terrain): void {
-  const r = PHYS.wormRadius;
-  for (let i = 0; i < 12 && !terrain.discFree(worm.x, worm.y, r); i++) {
-    const n = terrain.normalAt(worm.x, worm.y, r + 1) ?? { x: 0, y: -1 };
-    worm.x += n.x;
-    worm.y += n.y;
-  }
+  const t = (impactSpeed - PHYS.safeLandingSpeed) / (PHYS.maxDamageLandingSpeed - PHYS.safeLandingSpeed);
+  return t <= 0 ? 0 : Math.round(PHYS.maxFallDamage * Math.min(1, t));
 }

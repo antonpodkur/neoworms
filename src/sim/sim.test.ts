@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PHYS } from './constants';
-import { findSpawnPoints, generateMap, MAP_PRESETS } from './mapgen';
+import { findSpawnPoints, generateMap, MAP_PRESETS, mapFromImage } from './mapgen';
 import { mulberry32 } from './rng';
 import { Terrain } from './terrain';
 import { NO_INPUT, type WormInput } from './worm';
@@ -83,32 +83,62 @@ describe('Worm movement', () => {
 
     const worm = world.addWorm('A', 0, 420, restingY(GROUND));
     run(world, 10);
-    run(world, 60 * 5, { right: true });
+    run(world, Math.ceil((200 / PHYS.walkSpeed) * 60), { right: true }); // long enough to reach the wall
     expect(worm.grounded).toBe(true);
     expect(worm.y).toBeLessThan(restingY(GROUND) - 60); // went up the ramp
     expect(worm.x).toBeLessThan(600 - R + 1); // didn't pass the wall
   });
 
-  it('jumps forward and lands further along', () => {
+  /** Lands a jump started by `presses` (tick offsets of Jump presses) and returns the worm. */
+  function jumpWith(presses: number[], hold: Partial<WormInput> = {}) {
+    const world = flatWorld();
+    const worm = world.addWorm('A', 0, 400, restingY(GROUND));
+    run(world, 10);
+    for (let t = 0; t < 180; t++) world.step({ ...NO_INPUT, ...hold, jump: presses.includes(t) });
+    return worm;
+  }
+
+  it('crouches first, then jumps forward and lands further along', () => {
     const world = flatWorld();
     const worm = world.addWorm('A', 0, 400, restingY(GROUND));
     run(world, 10);
     run(world, 1, { jump: true });
+    run(world, Math.round(PHYS.jumpDelay * 60) - 2);
+    expect(worm.grounded).toBe(true); // still winding up
+    run(world, 3);
     expect(worm.grounded).toBe(false);
     run(world, 120);
     expect(worm.grounded).toBe(true);
-    expect(worm.x).toBeGreaterThan(460);
+    expect(worm.x).toBeGreaterThan(450);
     expect(worm.hp).toBe(100);
   });
 
-  it('takes fall damage from a big drop but not a small one', () => {
-    const world = flatWorld();
-    const small = world.addWorm('A', 0, 200, GROUND - 60);
-    const big = world.addWorm('B', 0, 600, GROUND - 380);
-    run(world, 240);
+  it('flips backwards when Jump is tapped twice quickly', () => {
+    const jump = jumpWith([0]);
+    const flip = jumpWith([0, 5]);
+    expect(jump.x).toBeGreaterThan(400);
+    expect(flip.x).toBeLessThan(400);
+  });
+
+  it('can be steered in the air by holding a direction', () => {
+    const forward = jumpWith([0], { right: true });
+    const back = jumpWith([0], { left: true });
+    const plain = jumpWith([0]);
+    expect(forward.x).toBeGreaterThan(plain.x + 3);
+    expect(back.x).toBeLessThan(plain.x - 3);
+  });
+
+  it('takes fall damage from a big drop but not a small one, up to the cap', () => {
+    const terrain = new Terrain(800, 3000);
+    for (let y = 2900; y < 3000; y++) for (let x = 0; x < 800; x++) terrain.mask[y * 800 + x] = 1;
+    const world = new World(terrain, 5000);
+    const small = world.addWorm('A', 0, 100, 2900 - 60);
+    const big = world.addWorm('B', 0, 400, 2900 - 300);
+    const huge = world.addWorm('C', 0, 700, 100);
+    run(world, 600);
     expect(small.hp).toBe(100);
     expect(big.hp).toBeLessThan(100);
-    expect(big.alive).toBe(true);
+    expect(huge.hp).toBe(100 - PHYS.maxFallDamage);
   });
 
   it('falls when the ground under it is blown away', () => {
@@ -156,6 +186,23 @@ describe('Explosions', () => {
     world.explode(400, GROUND - R, 30, 500);
     expect(a.alive).toBe(false);
     expect(world.activeWormId).toBe(b.id);
+  });
+});
+
+describe('Image maps', () => {
+  it('turns dark pixels into air and colored ones into ground, keeping two materials', () => {
+    // 4x1 RGBA image: black, pink, cyan, near-black.
+    const rgba = [0, 0, 0, 255, 220, 120, 250, 255, 150, 235, 250, 255, 30, 30, 30, 255];
+    const { terrain } = mapFromImage(rgba, 4, 1);
+    expect([...terrain.mask]).toEqual([0, 1, 2, 0]);
+    expect(terrain.isSolid(2, 0)).toBe(true);
+  });
+
+  it('scales the image', () => {
+    const rgba = [255, 255, 255, 255, 0, 0, 0, 255];
+    const { terrain } = mapFromImage(rgba, 2, 1, 2);
+    expect(terrain.width).toBe(4);
+    expect([...terrain.mask]).toEqual([1, 1, 0, 0, 1, 1, 0, 0]);
   });
 });
 

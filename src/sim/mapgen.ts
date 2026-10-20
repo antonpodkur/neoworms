@@ -2,14 +2,20 @@ import { createNoise2D, type NoiseFunction2D } from 'simplex-noise';
 import { mulberry32 } from './rng';
 import { Terrain, type Vec2 } from './terrain';
 
-export type MapPreset = 'one-island' | 'two-islands' | 'archipelago' | 'cavern';
+export type MapPreset = 'one-island' | 'two-islands' | 'archipelago' | 'cavern' | 'rope-gym';
 
-export const MAP_PRESETS: { id: MapPreset; name: string }[] = [
-  { id: 'one-island', name: 'One Island' },
-  { id: 'two-islands', name: 'Two Islands' },
-  { id: 'archipelago', name: 'Archipelago' },
-  { id: 'cavern', name: 'Cavern' },
+/** `enclosed` maps have a rock roof and walls instead of open sky. */
+export const MAP_PRESETS: { id: MapPreset; name: string; enclosed: boolean }[] = [
+  { id: 'one-island', name: 'One Island', enclosed: false },
+  { id: 'two-islands', name: 'Two Islands', enclosed: false },
+  { id: 'archipelago', name: 'Archipelago', enclosed: false },
+  { id: 'cavern', name: 'Cavern', enclosed: true },
+  { id: 'rope-gym', name: 'Rope Gym', enclosed: true },
 ];
+
+export function isMapPreset(value: unknown): value is MapPreset {
+  return MAP_PRESETS.some((p) => p.id === value);
+}
 
 export interface GeneratedMap {
   terrain: Terrain;
@@ -71,10 +77,38 @@ export function generateMap(preset: MapPreset, seed: number): GeneratedMap {
     }
   }
 
-  if (preset === 'cavern') addCavernShell(mask, width, height, noise);
+  if (MAP_PRESETS.find((p) => p.id === preset)!.enclosed) addCavernShell(mask, width, height, noise);
+  if (preset === 'rope-gym') addFloatingRocks(mask, width, noise);
   removeSmallChunks(mask, width, height, MIN_CHUNK);
 
   return { terrain: new Terrain(width, height, mask), waterLevel };
+}
+
+/** Brightness above which an image pixel counts as ground. */
+const IMAGE_GROUND_THRESHOLD = 40;
+/** Strip of water left along the bottom of image maps. */
+const IMAGE_WATER_DEPTH = 20;
+
+/**
+ * Builds terrain from an RGBA image (e.g. a level outline): dark pixels are air, anything
+ * else is ground. Greenish/cyan ground becomes material 2 so it can be drawn differently.
+ * `scale` resizes the image (nearest neighbour) so its worms-per-pixel match ours.
+ */
+export function mapFromImage(rgba: ArrayLike<number>, width: number, height: number, scale = 1): GeneratedMap {
+  const w = Math.round(width * scale);
+  const h = Math.round(height * scale);
+  const mask = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const sy = Math.min(height - 1, Math.floor(y / scale));
+    for (let x = 0; x < w; x++) {
+      const o = (sy * width + Math.min(width - 1, Math.floor(x / scale))) * 4;
+      const r = rgba[o];
+      const g = rgba[o + 1];
+      if (Math.max(r, g, rgba[o + 2]) <= IMAGE_GROUND_THRESHOLD) continue;
+      mask[y * w + x] = g > r ? 2 : 1;
+    }
+  }
+  return { terrain: new Terrain(w, h, mask), waterLevel: h - IMAGE_WATER_DEPTH };
 }
 
 function layoutIslands(preset: MapPreset, width: number, rng: () => number): Island[] {
@@ -97,6 +131,8 @@ function layoutIslands(preset: MapPreset, width: number, rng: () => number): Isl
     }
     case 'cavern':
       return [{ center: width * 0.5, halfWidth: width * 0.6, height: 0.55 }];
+    case 'rope-gym':
+      return [{ center: width * 0.5, halfWidth: width * 0.6, height: 0.35 }];
   }
 }
 
@@ -124,6 +160,18 @@ function addCavernShell(mask: Uint8Array, width: number, height: number, noise: 
       if (base > roughness || base + fbm(noise, x / 200 + 500, y / 200, 4) * roughness > 0) {
         mask[y * width + x] = 1;
       }
+    }
+  }
+}
+
+/** Scatters floating rocks through the middle of the map: rope anchors everywhere. */
+function addFloatingRocks(mask: Uint8Array, width: number, noise: NoiseFunction2D): void {
+  const top = 330;
+  const bottom = 780;
+  for (let y = top; y < bottom; y++) {
+    const fade = Math.min(1, (y - top) / 80, (bottom - y) / 80); // thin out toward the band edges
+    for (let x = 150; x < width - 150; x++) {
+      if (fbm(noise, x / 120 + 2000, y / 120 + 2000, 3) * fade > 0.42) mask[y * width + x] = 1;
     }
   }
 }

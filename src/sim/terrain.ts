@@ -4,7 +4,8 @@ export interface Vec2 {
 }
 
 /**
- * Destructible terrain stored as a pixel mask (1 = ground, 0 = air), like the original Worms.
+ * Destructible terrain stored as a pixel mask, like the original Worms: 0 = air, anything
+ * else = ground (the value is the ground's material, which only changes how it's drawn).
  * Everything outside the map counts as air.
  */
 export class Terrain {
@@ -22,7 +23,7 @@ export class Terrain {
     const ix = Math.floor(x);
     const iy = Math.floor(y);
     if (ix < 0 || iy < 0 || ix >= this.width || iy >= this.height) return false;
-    return this.mask[iy * this.width + ix] === 1;
+    return this.mask[iy * this.width + ix] !== 0;
   }
 
   /** Sets ground on/off for every pixel whose center lies inside the circle. */
@@ -53,6 +54,28 @@ export class Terrain {
       if (this.isSolid(cx + offsets[i], cy + offsets[i + 1])) return false;
     }
     return true;
+  }
+
+  /**
+   * Walks from (x0, y0) toward (x1, y1) in half-pixel steps, ignoring the first `skip`
+   * pixels. Returns the first ground point hit and the last open point just before it,
+   * or null if the whole path is open.
+   */
+  raycast(x0: number, y0: number, x1: number, y1: number, skip = 0): { hit: Vec2; before: Vec2 } | null {
+    const len = Math.hypot(x1 - x0, y1 - y0);
+    if (len === 0) return null;
+    const ux = (x1 - x0) / len;
+    const uy = (y1 - y0) / len;
+    let px = x0;
+    let py = y0;
+    for (let t = skip; t <= len; t += 0.5) {
+      const x = x0 + ux * t;
+      const y = y0 + uy * t;
+      if (this.isSolid(x, y)) return { hit: { x, y }, before: { x: px, y: py } };
+      px = x;
+      py = y;
+    }
+    return null;
   }
 
   /**

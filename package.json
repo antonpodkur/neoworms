@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "lil-gui": "^0.21.0",
     "phaser": "^4.2.1",
     "simplex-noise": "^4.0.3"
   },

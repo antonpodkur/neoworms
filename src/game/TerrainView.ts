@@ -39,7 +39,10 @@ export class TerrainView {
   }
 }
 
-/** Grass on every upward-facing surface, mottled soil with pebbles below, darker with depth. */
+/**
+ * Grass on every upward-facing surface, mottled soil with pebbles below, darker with depth.
+ * Material 2 (the second ground colour in imported maps) is drawn as grey-blue stone.
+ */
 function paint(ctx: CanvasRenderingContext2D, terrain: Terrain): void {
   const { width, height, mask } = terrain;
   const image = ctx.createImageData(width, height);
@@ -60,7 +63,10 @@ function paint(ctx: CanvasRenderingContext2D, terrain: Terrain): void {
       let r: number;
       let g: number;
       let b: number;
-      if (d <= 2) [r, g, b] = [158, 222, 96];
+      if (mask[i] === 2) {
+        const mottle = noise(x / 18 + 700, y / 18) * 0.5 + 0.5;
+        [r, g, b] = [118 - mottle * 26, 128 - mottle * 24, 146 - mottle * 20];
+      } else if (d <= 2) [r, g, b] = [158, 222, 96];
       else if (d <= 6) [r, g, b] = [104, 176, 68];
       else if (d <= 9) [r, g, b] = [86, 122, 50];
       else {

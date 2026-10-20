@@ -1,19 +1,26 @@
 import Phaser from 'phaser';
 import { DT } from '../sim/constants';
-import { MAP_PRESETS, type MapPreset } from '../sim/mapgen';
+import { generateMap, MAP_PRESETS, mapFromImage, type GeneratedMap } from '../sim/mapgen';
 import { randomSeed } from '../sim/rng';
+import type { Terrain } from '../sim/terrain';
 import { createMatch, type SimEvent, type TeamSetup, type World } from '../sim/world';
 import type { WormInput } from '../sim/worm';
 import { DEPTH } from './depth';
 import { explosionFlash, floatingText, splash } from './effects';
 import { Hud } from './Hud';
+import { findMap, imageScale, MAPS, type MapEntry } from './maps';
+import { RopeView } from './RopeView';
 import { TerrainView } from './TerrainView';
+import { showMapPicker, toggleTuningPanel } from './TuningPanel';
 import { WaterView } from './WaterView';
 import { teamColor, WormView } from './WormView';
 
 const STEP_MS = DT * 1000;
-/** Left click drops a debug explosion, roughly bazooka-sized. */
-const CLICK_BLAST = { radius: 40, damage: 40 };
+/**
+ * Left click drops a debug explosion the size of a Worms Revolution bazooka: crater 26,
+ * damage 45 reaching out to 47 in its level pixels, scaled to our worm size.
+ */
+const CLICK_BLAST = { radius: 21, damage: 45, reach: 39 };
 const MIN_ZOOM = 0.35;
 const MAX_ZOOM = 2.5;
 /** How far the camera may look past the map edges and above the map. */
@@ -32,26 +39,29 @@ const SANDBOX_TEAMS: TeamSetup[] = [
 ];
 
 interface SceneData {
-  preset?: MapPreset;
+  mapId?: string;
   seed?: number;
 }
 
 /**
- * Milestone 1 sandbox: one map, a few worms, click to blow holes.
+ * Sandbox: one map, a few worms, the ninja rope, and click-to-explode.
  * The simulation (World) runs at a fixed tick; this scene only feeds it input and draws it.
+ * The map and seed live in the URL (?map=rope-gym&seed=42), so a reload keeps the same map.
+ * Image maps load in preload(); generated ones are built in create().
  */
 export class GameScene extends Phaser.Scene {
   world!: World;
-  private preset: MapPreset = 'one-island';
+  private map!: MapEntry;
   private seed = 0;
   private terrainView!: TerrainView;
   private water!: WaterView;
   private wormViews = new Map<number, WormView>();
+  private ropeView!: RopeView;
   private aimGfx!: Phaser.GameObjects.Graphics;
   private hud!: Hud;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-  private pendingJump = false;
-  private pendingBackflip = false;
+  /** Key presses waiting for the next simulation tick. */
+  private pressed = { jump: false, backflip: false, fire: false };
   private accumulator = 0;
   private followActive = true;
 
@@ -60,24 +70,35 @@ export class GameScene extends Phaser.Scene {
   }
 
   init(data: SceneData): void {
-    this.preset = data.preset ?? 'one-island';
-    this.seed = data.seed ?? randomSeed();
+    // On first load the URL picks the map; after that, R, M and the map picker do.
+    const url = new URLSearchParams(location.search);
+    const urlSeed = Number(url.get('seed'));
+    const firstLoad = !data.mapId;
+    this.map = findMap(data.mapId ?? url.get('map')) ?? MAPS[0];
+    this.seed = data.seed ?? (firstLoad && urlSeed > 0 ? urlSeed : randomSeed());
     this.wormViews = new Map();
-    this.pendingJump = false;
-    this.pendingBackflip = false;
+    this.pressed = { jump: false, backflip: false, fire: false };
     this.accumulator = 0;
     this.followActive = true;
   }
 
+  preload(): void {
+    const key = imageKey(this.map);
+    if (this.map.kind === 'image' && !this.textures.exists(key)) this.load.image(key, this.map.url);
+  }
+
   create(): void {
-    this.world = createMatch(this.preset, this.seed, SANDBOX_TEAMS);
+    this.world = createMatch(this.buildMap(), this.seed, SANDBOX_TEAMS);
     const { terrain, waterLevel } = this.world;
-    const enclosed = this.preset === 'cavern';
+    history.replaceState(null, '', `?${new URLSearchParams({ map: this.map.id, seed: String(this.seed) })}`);
+    showMapPicker(MAPS, this.map.id, (mapId) => this.scene.restart({ mapId }));
+    const enclosed = isEnclosed(this.map, terrain);
     const headroom = enclosed ? 0 : SKY_HEADROOM;
     this.addBackdrop(enclosed ? 'cave' : 'sky', terrain.width, terrain.height, headroom);
     this.terrainView = new TerrainView(this, terrain, DEPTH.terrain);
     for (const worm of this.world.worms) this.wormViews.set(worm.id, new WormView(this, worm));
     this.water = new WaterView(this, waterLevel, DEPTH.water);
+    this.ropeView = new RopeView(this, DEPTH.rope);
     this.aimGfx = this.add.graphics().setDepth(DEPTH.labels);
     this.hud = new Hud();
     this.setupCamera(terrain.width, terrain.height, headroom);
@@ -98,10 +119,23 @@ export class GameScene extends Phaser.Scene {
       if (worm.alive) this.wormViews.get(worm.id)?.update(worm, alpha);
     }
     this.terrainView.flush();
+    this.ropeView.update(this.world.worms, this.wormViews);
     this.water.update(this.cameras.main, time);
     this.drawAim(time);
     this.updateCamera(delta);
     this.updateHud();
+  }
+
+  private buildMap(): GeneratedMap {
+    if (this.map.kind === 'generated') return generateMap(this.map.preset, this.seed);
+    const image = this.textures.get(imageKey(this.map)).getSourceImage() as HTMLImageElement;
+    const canvas = document.createElement('canvas');
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+    ctx.drawImage(image, 0, 0);
+    const { data } = ctx.getImageData(0, 0, image.width, image.height);
+    return mapFromImage(data, image.width, image.height, imageScale(this.map));
   }
 
   private readInput(): WormInput {
@@ -111,12 +145,10 @@ export class GameScene extends Phaser.Scene {
       right: c.right.isDown,
       up: c.up.isDown,
       down: c.down.isDown,
-      jump: this.pendingJump,
-      backflip: this.pendingBackflip,
+      ...this.pressed,
     };
-    this.pendingJump = false;
-    this.pendingBackflip = false;
-    if (input.left || input.right) this.followActive = true;
+    this.pressed = { jump: false, backflip: false, fire: false };
+    if (input.left || input.right || input.up || input.down) this.followActive = true;
     return input;
   }
 
@@ -148,31 +180,31 @@ export class GameScene extends Phaser.Scene {
   private setupInput(): void {
     const kb = this.input.keyboard!;
     this.cursors = kb.createCursorKeys();
-    kb.addCapture('ENTER,BACKSPACE,TAB');
+    kb.addCapture('ENTER,BACKSPACE,TAB,SPACE');
     const onPress = (key: string, action: () => void) =>
       kb.on(`keydown-${key}`, (e: KeyboardEvent) => {
         if (!e.repeat) action();
       });
-    onPress('ENTER', () => {
-      this.pendingJump = true;
+    const press = (action: keyof typeof this.pressed) => () => {
+      this.pressed[action] = true;
       this.followActive = true;
-    });
-    onPress('BACKSPACE', () => {
-      this.pendingBackflip = true;
-      this.followActive = true;
-    });
+    };
+    onPress('ENTER', press('jump'));
+    onPress('BACKSPACE', press('backflip'));
+    onPress('SPACE', press('fire'));
     onPress('TAB', () => {
       this.world.selectNextWorm();
       this.followActive = true;
     });
-    onPress('R', () => this.scene.restart({ preset: this.preset }));
-    onPress('M', () => this.scene.restart({ preset: nextPreset(this.preset) }));
+    onPress('R', () => this.scene.restart({ mapId: this.map.id }));
+    onPress('M', () => this.scene.restart({ mapId: nextMap(this.map).id }));
     onPress('H', () => this.hud.toggleHelp());
+    onPress('T', toggleTuningPanel);
 
     this.input.mouse?.disableContextMenu();
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       if (p.leftButtonDown() && !p.event.shiftKey) {
-        this.world.explode(p.worldX, p.worldY, CLICK_BLAST.radius, CLICK_BLAST.damage);
+        this.world.explode(p.worldX, p.worldY, CLICK_BLAST.radius, CLICK_BLAST.damage, CLICK_BLAST.reach);
       }
     });
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
@@ -221,18 +253,20 @@ export class GameScene extends Phaser.Scene {
     const view = worm && this.wormViews.get(worm.id);
     if (!worm || !view) return;
 
+    const my = view.y - 40 + Math.sin(time / 150) * 3;
+    g.fillStyle(teamColor(worm.team), 1);
+    g.lineStyle(2, 0x000000, 1);
+    g.fillTriangle(view.x - 6, my - 9, view.x + 6, my - 9, view.x, my);
+    g.strokeTriangle(view.x - 6, my - 9, view.x + 6, my - 9, view.x, my);
+
+    // While hanging on the rope, ↑ ↓ climb instead of aiming.
+    if (worm.rope?.phase === 'attached') return;
     const cx = view.x + Math.cos(worm.aim) * worm.facing * AIM_DISTANCE;
     const cy = view.y - Math.sin(worm.aim) * AIM_DISTANCE;
     g.lineStyle(2, 0xff3b3b, 1);
     g.strokeCircle(cx, cy, 5);
     g.fillStyle(0xff3b3b, 1);
     g.fillCircle(cx, cy, 1.5);
-
-    const my = view.y - 40 + Math.sin(time / 150) * 3;
-    g.fillStyle(teamColor(worm.team), 1);
-    g.lineStyle(2, 0x000000, 1);
-    g.fillTriangle(view.x - 6, my - 9, view.x + 6, my - 9, view.x, my);
-    g.strokeTriangle(view.x - 6, my - 9, view.x + 6, my - 9, view.x, my);
   }
 
   private addBackdrop(kind: keyof typeof BACKDROPS, width: number, height: number, headroom: number): void {
@@ -258,7 +292,7 @@ export class GameScene extends Phaser.Scene {
 
   private updateHud(): void {
     const worm = this.world.activeWorm;
-    const mapName = MAP_PRESETS.find((p) => p.id === this.preset)!.name;
+    const mapName = this.map.name;
     const teamTotals = SANDBOX_TEAMS.map((team, i) => {
       const hp = this.world.worms.filter((w) => w.team === i && w.alive).reduce((sum, w) => sum + w.hp, 0);
       return `${team.name} ${hp}`;
@@ -271,7 +305,18 @@ export class GameScene extends Phaser.Scene {
   }
 }
 
-function nextPreset(current: MapPreset): MapPreset {
-  const i = MAP_PRESETS.findIndex((p) => p.id === current);
-  return MAP_PRESETS[(i + 1) % MAP_PRESETS.length].id;
+function nextMap(current: MapEntry): MapEntry {
+  return MAPS[(MAPS.indexOf(current) + 1) % MAPS.length];
+}
+
+function imageKey(map: MapEntry): string {
+  return `map:${map.id}`;
+}
+
+/** Generated maps say so; image maps count as caves when ground covers most of the top edge. */
+function isEnclosed(map: MapEntry, terrain: Terrain): boolean {
+  if (map.kind === 'generated') return MAP_PRESETS.find((p) => p.id === map.preset)!.enclosed;
+  let solid = 0;
+  for (let x = 0; x < terrain.width; x++) if (terrain.isSolid(x, 0)) solid++;
+  return solid > terrain.width / 2;
 }

@@ -2,6 +2,7 @@
 export const DEPTH = {
   sky: 0,
   terrain: 10,
+  rope: 15,
   worms: 20,
   effects: 30,
   water: 40,

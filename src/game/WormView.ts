@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { PHYS } from '../sim/constants';
 import type { Worm } from '../sim/worm';
 import { DEPTH } from './depth';
 
@@ -25,6 +26,8 @@ export class WormView {
   private readonly name: Phaser.GameObjects.Text;
   private readonly hp: Phaser.GameObjects.Text;
   private shownHp: number;
+  /** The body is drawn for a radius-7 worm and scaled to the actual size. */
+  private readonly scale = PHYS.wormRadius / 7;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -44,9 +47,9 @@ export class WormView {
   update(worm: Worm, alpha: number): void {
     this.x = worm.prevX + (worm.x - worm.prevX) * alpha;
     this.y = worm.prevY + (worm.y - worm.prevY) * alpha;
-    this.body.setPosition(this.x, this.y).setScale(worm.facing, 1);
-    this.hp.setPosition(this.x, this.y - 11);
-    this.name.setPosition(this.x, this.y - 24);
+    this.body.setPosition(this.x, this.y).setScale(worm.facing * this.scale, this.scale);
+    this.hp.setPosition(this.x, this.y - 11 * this.scale);
+    this.name.setPosition(this.x, this.y - 24 * this.scale);
     if (worm.hp !== this.shownHp) {
       this.shownHp = worm.hp;
       this.hp.setText(String(worm.hp));
