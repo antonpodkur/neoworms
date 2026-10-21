@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { PHYS, resetPhys } from './constants';
 import { attachRope } from './rope';
 import { Terrain } from './terrain';
+import { AIRSTRIKE, BLASTS, MELEE, roundBlast } from './weapons';
 import { NO_INPUT, type Worm, type WormInput } from './worm';
 import { World, type SimEvent } from './world';
 
@@ -187,7 +188,7 @@ describe('Mines', () => {
     world.spawn({ kind: 'mine', x: 300, y: restingY(GROUND), vx: 0, vy: 0, armed: true });
     world.spawn({ kind: 'mine', x: 330, y: restingY(GROUND), vx: 0, vy: 0, armed: true });
     run(world, 30);
-    world.explode(290, GROUND, { radius: 15, damage: 10, reach: 30, push: 1 });
+    world.explode(290, GROUND, roundBlast(15, 10, 30, 1));
     const events = run(world, 120);
     expect(events.filter((e) => e.type === 'explosion')).toHaveLength(3); // the first blast, then both mines
   });
@@ -227,5 +228,165 @@ describe('Weapons on the rope', () => {
     run(world, 1, { fire: true });
     expect(worm.rope?.phase).toBe('shooting');
     expect(world.projectiles).toHaveLength(0);
+  });
+});
+
+describe('Explosions (Worms Revolution table)', () => {
+  it('hurt at full strength near the centre and fade to the min at the edge', () => {
+    const world = groundWorld();
+    const near = world.addWorm('N', 0, 300, restingY(GROUND));
+    const far = world.addWorm('F', 0, 700, restingY(GROUND));
+    run(world, 5);
+    const blast = BLASTS.bazooka;
+    world.explode(near.x, near.y, blast);
+    world.explode(far.x - (blast.damageRange[1] - 1), far.y, blast);
+    expect(near.hp).toBe(100 - blast.damage[1]);
+    expect(far.hp).toBeLessThan(100);
+    expect(far.hp).toBeGreaterThanOrEqual(100 - 3);
+  });
+
+  it('push less when they go off under water', () => {
+    const pushAt = (waterLevel: number) => {
+      const world = new World(new Terrain(400, 400), waterLevel);
+      world.spawn({ kind: 'grenade', x: 200, y: 200, vx: 0, vy: 0, fuse: 5 });
+      world.explode(180, 210, BLASTS.bazooka);
+      return world.projectiles[0].vx;
+    };
+    expect(pushAt(205)).toBeCloseTo(pushAt(5000) * BLASTS.bazooka.waterPush, 5);
+  });
+});
+
+describe('Dynamite', () => {
+  it('is set down in front of the worm and goes off after 5 seconds', () => {
+    const world = groundWorld();
+    const worm = standingWorm(world, 200, 'dynamite');
+    run(world, 1, { fire: true });
+    expect(world.projectiles).toMatchObject([{ kind: 'dynamite' }]);
+    expect(world.projectiles[0].x).toBeGreaterThan(worm.x);
+    const boom = untilExplosion(world)!;
+    expect(boom.ticks).toBeGreaterThan(5 * 60 - 3);
+    expect(boom.ticks).toBeLessThan(5 * 60 + 3);
+    expect(boom.r).toBe(BLASTS.dynamite.radius);
+  });
+});
+
+describe('Old Woman', () => {
+  it('walks off, turns around at a wall and blows up after 5 seconds', () => {
+    const world = groundWorld();
+    for (let y = 0; y < GROUND; y++) for (let x = 300; x < 310; x++) world.terrain.mask[y * 1200 + x] = 1; // a wall
+    standingWorm(world, 200, 'oldWoman');
+    run(world, 1, { fire: true });
+    const lady = world.projectiles[0];
+    expect(lady.kind).toBe('oldWoman');
+    run(world, 60);
+    expect(lady.x).toBeGreaterThan(215);
+    run(world, 3 * 60);
+    expect(lady.dir).toBe(-1);
+    const boom = untilExplosion(world)!;
+    expect(boom.r).toBe(BLASTS.oldWoman.radius);
+  });
+});
+
+describe('Cluster and banana bombs', () => {
+  it.each([
+    ['cluster', 'fragment'],
+    ['banana', 'bomblet'],
+  ] as const)('the %s breaks into five %ss that explode where they land', (weapon, piece) => {
+    const world = groundWorld();
+    const worm = standingWorm(world, 300, weapon);
+    worm.fuse = 1;
+    worm.aim = Math.PI / 4;
+    chargeAndFire(world, 30);
+    untilExplosion(world);
+    expect(world.projectiles.filter((p) => p.kind === piece)).toHaveLength(5);
+    const events = run(world, 300);
+    expect(events.filter((e) => e.type === 'explosion')).toHaveLength(5);
+    expect(world.projectiles).toHaveLength(0);
+  });
+});
+
+describe('Air strike', () => {
+  it('drops five missiles in a row around the clicked spot', () => {
+    const world = groundWorld();
+    standingWorm(world, 200, 'airstrike');
+    run(world, 1, { fire: true }); // Space alone does nothing
+    expect(world.projectiles).toHaveLength(0);
+    run(world, 1, { target: 800 });
+    expect(world.projectiles.filter((p) => p.kind === 'missile')).toHaveLength(AIRSTRIKE.missiles);
+    const hits: number[] = [];
+    for (let t = 0; t < 600 && world.projectiles.length > 0; t++) {
+      for (const e of run(world, 1)) if (e.type === 'explosion') hits.push(e.x);
+    }
+    expect(hits).toHaveLength(AIRSTRIKE.missiles);
+    for (const x of hits) expect(Math.abs(x - 800)).toBeLessThan(AIRSTRIKE.spacing * 2 + 8);
+  });
+});
+
+describe('Melee', () => {
+  it('the bat knocks a worm in front of it along the aim and hurts it', () => {
+    const world = groundWorld();
+    const batter = standingWorm(world, 200, 'bat');
+    batter.aim = Math.PI / 6;
+    const target = world.addWorm('T', 1, 215, restingY(GROUND));
+    run(world, 5);
+    const events = run(world, 1, { fire: true });
+    expect(events).toContainEqual(expect.objectContaining({ type: 'hit', landed: true }));
+    expect(target.hp).toBe(100 - MELEE.bat.damage);
+    expect(target.vx).toBeGreaterThan(300);
+    expect(target.vy).toBeLessThan(0);
+  });
+
+  it('the prod pushes the worm in front without hurting it, and misses worms behind', () => {
+    const world = groundWorld();
+    standingWorm(world, 200, 'prod');
+    const front = world.addWorm('F', 1, 214, restingY(GROUND));
+    const behind = world.addWorm('B', 1, 186, restingY(GROUND));
+    run(world, 5);
+    run(world, 1, { fire: true });
+    expect(front.hp).toBe(100);
+    expect(front.knocked).toBe(true);
+    expect(front.vx).toBeGreaterThan(0);
+    expect(behind.knocked).toBe(false);
+  });
+});
+
+describe('Impact', () => {
+  it('thrown worms slide a little along the ground after landing', () => {
+    const world = groundWorld();
+    const worm = standingWorm(world, 300, 'rope');
+    Object.assign(worm, { y: worm.y - 3, vx: 200, vy: 150, grounded: false, knocked: true });
+    for (let t = 0; t < 30 && !worm.grounded; t++) run(world, 1);
+    expect(worm.slide).toBeGreaterThan(0);
+    const landedAt = worm.x;
+    run(world, 2 * 60);
+    expect(worm.slide).toBe(0);
+    // Half a worm height to two: noticeable, but no ice rink.
+    expect(worm.x).toBeGreaterThan(landedAt + PHYS.wormRadius);
+    expect(worm.x).toBeLessThan(landedAt + PHYS.wormRadius * 4);
+  });
+
+  it("worms that just drop don't slide", () => {
+    const world = groundWorld();
+    const worm = standingWorm(world, 300, 'rope');
+    Object.assign(worm, { y: worm.y - 60, vx: 0, vy: 0, grounded: false });
+    run(world, 60);
+    expect(worm.grounded).toBe(true);
+    expect(worm.slide).toBe(0);
+    expect(worm.x).toBe(300);
+  });
+
+  it('grenades bounce off worms instead of passing through', () => {
+    const world = groundWorld();
+    const wall = world.addWorm('W', 1, 400, restingY(GROUND));
+    run(world, 5);
+    world.spawn({ kind: 'grenade', x: 300, y: GROUND - 4, vx: 300, vy: 0, fuse: 5 });
+    const grenade = world.projectiles[0];
+    let furthest = 0;
+    for (let t = 0; t < 60; t++) {
+      run(world, 1);
+      furthest = Math.max(furthest, grenade.x);
+    }
+    expect(furthest).toBeLessThan(wall.x - PHYS.wormRadius);
+    expect(grenade.x).toBeLessThan(wall.x);
   });
 });

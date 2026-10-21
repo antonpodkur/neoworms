@@ -21,6 +21,8 @@ export interface WormInput {
   toggle: boolean;
   /** A weapon picked from the weapon menu this tick. */
   select: WeaponId | null;
+  /** The map was clicked this tick at this x: calls in an air strike there. */
+  target: number | null;
 }
 
 export const NO_INPUT: WormInput = {
@@ -34,6 +36,7 @@ export const NO_INPUT: WormInput = {
   fireHeld: false,
   toggle: false,
   select: null,
+  target: null,
 };
 
 export interface Worm {
@@ -55,6 +58,10 @@ export interface Worm {
   knocked: boolean;
   /** Sub-pixel walking distance carried between ticks. */
   walkProgress: number;
+  /** Sliding along the ground after a hard landing (px/s, negative is left); 0 when not. */
+  slide: number;
+  /** Seconds spent in the current slide. */
+  slideTime: number;
   /** A jump being wound up (the worm crouches first): what it becomes and ticks until take-off. */
   pendingJump: { kind: 'jump' | 'backflip'; ticksLeft: number } | null;
   /** How strongly ← → steer this flight, as a fraction of gravity; 0 when it can't be steered. */
@@ -87,6 +94,8 @@ export function createWorm(id: number, name: string, team: number, x: number, y:
     grounded: false,
     knocked: false,
     walkProgress: 0,
+    slide: 0,
+    slideTime: 0,
     pendingJump: null,
     afterTouch: 0,
     rope: null,
@@ -110,14 +119,18 @@ export function stepWorm(worm: Worm, input: WormInput, terrain: Terrain): number
   if (input.up) worm.aim = Math.min(Math.PI / 2, worm.aim + PHYS.aimSpeed * DT);
   if (input.down) worm.aim = Math.max(-Math.PI / 2, worm.aim - PHYS.aimSpeed * DT);
 
-  if (worm.grounded) {
+  if (worm.grounded && worm.slide !== 0) {
+    slide(worm, terrain); // no control until it stops
+  } else if (worm.grounded) {
     if (input.backflip) queueJump(worm, 'backflip');
     else if (input.jump) queueJump(worm, 'jump');
 
     if (worm.pendingJump) crouch(worm, input);
     else if (input.left !== input.right) walk(worm, input.left ? -1 : 1, terrain);
     else worm.walkProgress = 0;
+  }
 
+  if (worm.grounded) {
     // Ground can vanish under a worm (explosions), so re-check support every tick.
     if (worm.grounded && terrain.discFree(worm.x, worm.y + 1, PHYS.wormRadius)) {
       worm.grounded = false;
@@ -199,11 +212,21 @@ function fly(worm: Worm, input: WormInput, terrain: Terrain): number {
 function collide(worm: Worm, n: Vec2): number {
   const vn = worm.vx * n.x + worm.vy * n.y; // negative when moving into the surface
   const isFloor = n.y < PHYS.floorNormalY;
+  const speed = Math.hypot(worm.vx, worm.vy);
 
-  if (isFloor && (!worm.knocked || Math.hypot(worm.vx, worm.vy) < PHYS.knockLandSpeed)) {
+  if (isFloor && (!worm.knocked || speed < PHYS.knockLandSpeed)) {
     // Thrown worms already took blast damage, so only regular falls hurt.
     const damage = worm.knocked ? 0 : fallDamage(-vn);
+    // Like WR, thrown worms slide on after landing, and so do worms coming in fast off the rope.
+    const share = worm.knocked
+      ? PHYS.slideShare
+      : worm.ropeChain && speed >= PHYS.slideFromRopeMinSpeed
+        ? PHYS.slideFromRopeShare
+        : 0;
+    const along = worm.vx * -n.y + worm.vy * n.x; // speed along the floor, positive is right
     land(worm);
+    const angle = (Math.atan2(-vn, Math.abs(along)) * 180) / Math.PI; // 0 = skimming the floor
+    if (share > 0 && angle <= PHYS.slideMaxImpactAngle) startSlide(worm, along * share);
     return damage;
   }
 
@@ -220,8 +243,50 @@ function land(worm: Worm): void {
   worm.vy = 0;
   worm.grounded = true;
   worm.knocked = false;
+  worm.slide = 0;
   worm.afterTouch = 0;
   worm.ropeChain = false;
+}
+
+function startSlide(worm: Worm, speed: number): void {
+  if (Math.abs(speed) < PHYS.slideStopSpeed) return;
+  worm.slide = Math.sign(speed) * Math.min(Math.abs(speed), PHYS.slideMaxSpeed);
+  worm.slideTime = 0;
+  worm.walkProgress = 0;
+  worm.facing = speed < 0 ? -1 : 1;
+}
+
+/**
+ * Slides along the ground, following slopes like walking, and slows down harder the longer it
+ * slides (WR's friction ramp). Stops at a wall, when slow, or after the longest slide.
+ * Sliding off a ledge turns into a fall with the slide's speed.
+ */
+function slide(worm: Worm, terrain: Terrain): void {
+  worm.slideTime += DT;
+  const ramp = Math.min(1, worm.slideTime / PHYS.slideDecelRamp);
+  const decel = PHYS.slideDecelStart + (PHYS.slideDecelEnd - PHYS.slideDecelStart) * ramp;
+  const speed = Math.abs(worm.slide) - decel * DT;
+  if (speed < PHYS.slideStopSpeed || worm.slideTime >= PHYS.slideMaxTime) {
+    worm.slide = 0;
+    worm.walkProgress = 0;
+    return;
+  }
+  const dir = worm.slide < 0 ? -1 : 1;
+  worm.slide = dir * speed;
+  worm.walkProgress += speed * DT;
+  while (worm.walkProgress >= 1) {
+    worm.walkProgress -= 1;
+    if (!stepSideways(worm, dir, terrain)) {
+      worm.slide = 0; // hit a wall
+      worm.walkProgress = 0;
+      return;
+    }
+    if (!worm.grounded) {
+      worm.vx = dir * speed;
+      worm.slide = 0;
+      return;
+    }
+  }
 }
 
 /** Grows from nothing at the safe landing speed up to the cap. */

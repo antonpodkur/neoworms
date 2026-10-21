@@ -1,7 +1,19 @@
 import { WEAPON_ORDER, WEAPONS, type WeaponId } from '../sim/weapons';
 
 /** Placeholder icons until real art (milestone 7). */
-const ICONS: Record<WeaponId, string> = { rope: '🪝', bazooka: '🚀', grenade: '💣', mine: '◉' };
+const ICONS: Record<WeaponId, string> = {
+  rope: '🪝',
+  bazooka: '🚀',
+  grenade: '💣',
+  cluster: '🎆',
+  banana: '🍌',
+  dynamite: '🧨',
+  mine: '◉',
+  oldWoman: '👵',
+  airstrike: '✈️',
+  bat: '🏏',
+  prod: '👉',
+};
 
 /**
  * The weapon menu (Shift). ← → move, Space or Enter picks, Shift or Esc closes; clicking a

@@ -47,12 +47,39 @@ const defaults = {
   /** Worms thrown by explosions bounce and slide before they settle. */
   knockBounce: 0.5,
   knockFriction: 0.75,
-  knockLandSpeed: 120,
+  /** Thrown worms hitting the floor slower than this land (and slide) instead of bouncing: WR's SlideMaxImpactSpeed. */
+  knockLandSpeed: 290,
   /** Below this speed an airborne worm that touches ground just settles. */
   settleSpeed: 35,
 
-  blastKnockback: 365,
-  blastLift: 95,
+  /**
+   * Sliding after a landing, from WR's Soldier data (its speeds x 1.93 to our px/s, the same
+   * ratio as its jump). A thrown worm keeps 60% of its speed along the floor, a worm coming in
+   * fast off the rope 40%; it slows down harder the longer it slides, for at most 1.5 s.
+   * The top speed and the slowing down are by feel (WR's converted 145 px/s and 77 → 193 px/s²
+   * slid too far): the export doesn't make WR's deceleration units clear.
+   */
+  slideShare: 0.6,
+  slideFromRopeShare: 0.4,
+  slideFromRopeMinSpeed: 231,
+  slideMaxSpeed: 100,
+  /** Only landings that come in at most this many degrees from the floor turn into a slide. */
+  slideMaxImpactAngle: 70,
+  slideDecelStart: 154,
+  slideDecelEnd: 386,
+  /** Seconds for the slowing down to build up from start to end. */
+  slideDecelRamp: 2.1,
+  slideMaxTime: 1.5,
+  slideStopSpeed: 4,
+
+  /**
+   * Speed a worm gets at the heart of a bazooka blast; other blasts scale from it. WR's push
+   * force 130 in its velocity units, converted like the jump (80 → 154 px/s): 130 × 1.93.
+   * A direct hit throws a worm ~4.5 worm heights up.
+   */
+  blastKnockback: 250,
+  /** Extra upward speed at that strength, so thrown worms fly in a slight arc. */
+  blastLift: 30,
 
   /** Total rope length, including the parts bent around corners. */
   ropeMaxLength: 380,

@@ -3,6 +3,7 @@ import { PHYS } from './constants';
 import { findSpawnPoints, generateMap, MAP_PRESETS, mapFromImage } from './mapgen';
 import { mulberry32 } from './rng';
 import { Terrain } from './terrain';
+import { roundBlast } from './weapons';
 import { NO_INPUT, type WormInput } from './worm';
 import { World } from './world';
 
@@ -166,7 +167,7 @@ describe('Explosions', () => {
     const near = world.addWorm('A', 0, 400, restingY(GROUND));
     const far = world.addWorm('B', 0, 700, restingY(GROUND));
     run(world, 10);
-    world.explode(410, GROUND, { radius: 40, damage: 40, reach: 48, push: 1 });
+    world.explode(410, GROUND, roundBlast(40, 40, 48, 1));
 
     expect(world.terrain.isSolid(410, GROUND + 10)).toBe(false);
     expect(near.hp).toBeLessThan(100);

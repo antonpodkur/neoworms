@@ -26,9 +26,12 @@ Each milestone ends with something playable.
   - [ ] Later: drop weapons from the rope, knock other worms, limited shots per turn
 - [ ] **3 · Weapons**: aim + hold to charge, weapon menu; bazooka (wind), grenade (1–5 s fuse, bounces), mines (proximity, arming delay, duds); chain reactions. Use the WR explosion table (separate crater, damage reach, push reach).
   - [x] Shift weapon menu, Space hold-to-charge, Tab fuse toggle, wind; bazooka, grenade, mines (map mines, arming, duds, chain reactions); Enter drops grenades/mines from the rope
-  - [ ] Tune by feel (speeds, wind strength, grenade bounce, mine sizes); grenades don't bounce off worms yet
+  - [x] WR explosion table in full (inner/outer ranges for damage and push, extra lift, water), grenades bounce off worms
+  - [x] Dynamite, Old Woman, Cluster Bomb, Banana Bomb, Air Strike (click the map), Baseball Bat, Prod
+  - [x] WR impact: thrown worms slide after landing (and fast rope landings), worms at 0 HP blow up at the end of the turn
+  - [ ] Tune by feel (speeds, wind strength, grenade bounce, mine sizes, split speeds, air strike angle)
 - [x] **4 · Same-screen match**: setup screen (2–4 teams, worms, turn time, health, sudden death, map), turns with timer, retreat time, settle-before-next-turn, wind per turn, sudden death (rising water), team health bars, win screen with rematch
-  - Later: ammo limits per weapon (schemes), worms exploding at 0 HP at the end of a turn (WR "WormDeathBlast")
+  - Later: ammo limits per weapon (schemes)
 - [ ] **5 · Online**: lobby with room codes, team/worm names, host picks map + settings, streaming, disconnect handling
   - [x] Repo split into `client/`, `server/`, `shared/` (npm workspaces)
   - [x] Relay on Cloudflare (PartyServer / Durable Objects): rooms by 4-letter code, host/guest, forwarding

@@ -92,6 +92,8 @@ export class GameScene extends Phaser.Scene {
   private pressed = { jump: false, backflip: false, fire: false, toggle: false };
   /** A weapon picked from the menu, waiting for the next simulation tick. */
   private picked: WeaponId | null = null;
+  /** Where the map was clicked for an air strike, waiting for the next simulation tick. */
+  private pickedTarget: number | null = null;
   private accumulator = 0;
   private followActive = true;
   /** Online: events since the last frame we sent. */
@@ -123,6 +125,7 @@ export class GameScene extends Phaser.Scene {
     this.wormViews = new Map();
     this.pressed = { jump: false, backflip: false, fire: false, toggle: false };
     this.picked = null;
+    this.pickedTarget = null;
     this.accumulator = 0;
     this.followActive = true;
     this.unsentEvents = [];
@@ -400,7 +403,9 @@ export class GameScene extends Phaser.Scene {
   private readInput(): WormInput {
     const c = this.cursors;
     const select = this.picked;
+    const target = this.pickedTarget;
     this.picked = null;
+    this.pickedTarget = null;
     // While the weapon menu is open the keys drive the menu, not the worm.
     if (this.weaponPanel.isOpen) return { ...NO_INPUT, select };
     const input: WormInput = {
@@ -411,6 +416,7 @@ export class GameScene extends Phaser.Scene {
       fireHeld: c.space.isDown,
       ...this.pressed,
       select,
+      target,
     };
     this.pressed = { jump: false, backflip: false, fire: false, toggle: false };
     if (input.left || input.right || input.up || input.down) this.followActive = true;
@@ -444,6 +450,10 @@ export class GameScene extends Phaser.Scene {
           break;
         case 'dud':
           floatingText(this, e.x, e.y - 10, 'dud', 0xcccccc);
+          break;
+        case 'hit':
+          floatingText(this, e.x, e.y - 20, e.landed ? 'WHACK!' : 'whoosh', e.landed ? 0xffe14d : 0xcccccc);
+          if (e.landed) this.cameras.main.shake(120, 0.004);
           break;
         case 'turnStart': {
           this.weaponPanel.close();
@@ -524,6 +534,15 @@ export class GameScene extends Phaser.Scene {
     onPress('T', toggleTuningPanel);
 
     this.input.mouse?.disableContextMenu();
+    // Air strike: a left click on the map calls it in there.
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      if (!p.leftButtonDown() || p.event.altKey || this.weaponPanel.isOpen) return;
+      const worm = this.match.activeWorm;
+      const mine = !this.online || this.isRunningGame();
+      if (!worm || !mine || WEAPONS[worm.weapon].use !== 'strike') return;
+      this.pickedTarget = Math.round(this.cameras.main.getWorldPoint(p.x, p.y).x);
+      this.followActive = true;
+    });
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       const panning = p.rightButtonDown() || p.middleButtonDown() || (p.leftButtonDown() && p.event.altKey);
       if (!panning) return;
@@ -581,6 +600,7 @@ export class GameScene extends Phaser.Scene {
 
     // While hanging on the rope, ↑ ↓ climb instead of aiming.
     if (worm.rope?.phase === 'attached') return;
+    if (WEAPONS[worm.weapon].use === 'strike') return this.drawStrikeTarget(g, worm);
     const cx = view.x + Math.cos(worm.aim) * worm.facing * AIM_DISTANCE;
     const cy = view.y - Math.sin(worm.aim) * AIM_DISTANCE;
     g.lineStyle(2, 0xff3b3b, 1);
@@ -605,6 +625,23 @@ export class GameScene extends Phaser.Scene {
       const to = 12 + (t + 1 / POWER_SEGMENTS) * POWER_LENGTH;
       g.lineStyle(3 + t * 5, Phaser.Display.Color.GetColor(color.r, color.g, color.b), 1);
       g.lineBetween(view.x + dx * from, view.y + dy * from, view.x + dx * to, view.y + dy * to);
+    }
+  }
+
+  /** Air strike: a target where the pointer's column meets the ground, arrows the way it comes in. */
+  private drawStrikeTarget(g: Phaser.GameObjects.Graphics, worm: Worm): void {
+    const pointer = this.input.activePointer;
+    const x = this.cameras.main.getWorldPoint(pointer.x, pointer.y).x;
+    const y = this.world.surfaceY(Math.round(x));
+    g.lineStyle(2, 0xff3b3b, 1);
+    g.strokeCircle(x, y, 10);
+    g.lineBetween(x - 15, y, x - 5, y);
+    g.lineBetween(x + 5, y, x + 15, y);
+    g.lineBetween(x, y - 15, x, y - 5);
+    for (let i = 1; i <= 3; i++) {
+      const ax = x - worm.facing * (20 + i * 14);
+      const ay = y - 40 - i * 34;
+      g.lineBetween(ax, ay, ax + worm.facing * 8, ay + 18);
     }
   }
 
@@ -660,7 +697,8 @@ export class GameScene extends Phaser.Scene {
 
 function weaponLabel(worm: Worm): string {
   const weapon = WEAPONS[worm.weapon];
-  return weapon.hasFuse ? `${weapon.name} (${worm.fuse} s)` : weapon.name;
+  if (weapon.hasFuse) return `${weapon.name} (${worm.fuse} s)`;
+  return weapon.use === 'strike' ? `${weapon.name} (click the map)` : weapon.name;
 }
 
 function imageKey(map: MapEntry): string {

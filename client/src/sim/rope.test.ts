@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PHYS } from './constants';
 import { attachRope, ropeLength, type AttachedRope } from './rope';
 import { Terrain } from './terrain';
+import { roundBlast } from './weapons';
 import { NO_INPUT, type Worm, type WormInput } from './worm';
 import { World } from './world';
 
@@ -141,7 +142,7 @@ describe('Ninja rope', () => {
   it('is knocked off by explosions', () => {
     const world = openWorld();
     const worm = hangingWorm(world, 150, 0);
-    world.explode(worm.x + 10, worm.y, { radius: 30, damage: 10, reach: 38, push: 1 });
+    world.explode(worm.x + 10, worm.y, roundBlast(30, 10, 38, 1));
     expect(worm.rope).toBeNull();
   });
 });

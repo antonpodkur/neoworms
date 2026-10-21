@@ -10,7 +10,7 @@ import {
 } from './projectiles';
 import { mulberry32, nextRandom } from './rng';
 import type { Terrain } from './terrain';
-import { useWeapons, type Blast, type WeaponContext } from './weapons';
+import { BLASTS, useWeapons, type Blast, type Melee, type WeaponContext } from './weapons';
 import { createWorm, NO_INPUT, stepWorm, type Worm, type WormInput } from './worm';
 
 /**
@@ -25,6 +25,7 @@ export type SimEvent =
   | { type: 'sink'; x: number; y: number }
   | { type: 'mineTriggered'; id: number }
   | { type: 'dud'; x: number; y: number }
+  | { type: 'hit'; x: number; y: number; landed: boolean }
   | { type: 'weaponUsed' };
 
 /** Everything about a World that changes as the game is played (all but the terrain). */
@@ -160,25 +161,61 @@ export class World implements ProjectileContext, WeaponContext {
   explode(x: number, y: number, blast: Blast): void {
     this.terrain.carve(x, y, blast.radius);
     this.events.push({ type: 'carve', x, y, r: blast.radius }, { type: 'explosion', x, y, r: blast.radius });
+    const underwater = y > this.waterLevel;
 
     for (const worm of this.worms) {
       if (!worm.alive) continue;
-      const push = blastPush(worm.x - x, worm.y - y, blast);
-      if (!push) continue;
-      worm.vx += push.vx;
-      worm.vy += push.vy;
-      worm.grounded = false;
-      worm.knocked = true;
-      worm.afterTouch = 0;
-      worm.pendingJump = null;
-      worm.ropeChain = false;
-      worm.rope = null; // blasts knock worms off their rope
-      this.damage(worm, Math.max(1, Math.round(blast.damage * push.power)));
+      const dx = worm.x - x;
+      const dy = worm.y - y;
+      const push = blastPush(dx, dy, blast, underwater);
+      if (push) this.throwWorm(worm, push.vx, push.vy);
+      const damage = falloff(Math.hypot(dx, dy), blast.damage, blast.damageRange);
+      if (damage > 0) this.damage(worm, Math.max(1, Math.round(damage)));
     }
     for (const p of this.projectiles) {
-      const push = p.dead ? null : blastPush(p.x - x, p.y - y, blast);
+      const push = p.dead ? null : blastPush(p.x - x, p.y - y, blast, underwater);
       if (push) blastProjectile(p, push.vx, push.vy);
     }
+  }
+
+  /**
+   * A melee swing from `attacker` along (dirX, dirY): the first worm within reach in front of
+   * it is knocked along the swing and takes the weapon's damage.
+   */
+  hit(attacker: Worm, dirX: number, dirY: number, melee: Melee): void {
+    const inFront = (w: Worm) => {
+      const dx = w.x - attacker.x;
+      const dy = w.y - attacker.y;
+      const dist = Math.hypot(dx, dy);
+      // Within reach, and no more than ~60° off the line of the swing.
+      return dist < melee.reach && dx * dirX + dy * dirY > dist * 0.5;
+    };
+    const target = this.worms.find((w) => w.alive && w !== attacker && inFront(w));
+    const at = target ?? { x: attacker.x + dirX * melee.reach, y: attacker.y + dirY * melee.reach };
+    this.events.push({ type: 'hit', x: at.x, y: at.y, landed: !!target });
+    if (!target) return;
+    const speed = (PHYS.blastKnockback * melee.push) / BAZOOKA_PUSH;
+    this.throwWorm(target, dirX * speed, dirY * speed - PHYS.blastLift * (melee.push / BAZOOKA_PUSH));
+    if (melee.damage > 0) this.damage(target, melee.damage);
+  }
+
+  /** The first ground from the top in column x, or the water if there's none. */
+  surfaceY(x: number): number {
+    for (let y = 0; y < this.waterLevel && y < this.terrain.height; y++) {
+      if (this.terrain.isSolid(x, y)) return y;
+    }
+    return this.waterLevel;
+  }
+
+  /**
+   * Worms left at 0 HP blow up (WR "WormDeathBlast"), all at once. Returns whether any did:
+   * their blasts may hurt others, so the match lets things settle and calls this again.
+   */
+  detonateDying(): boolean {
+    const dying = this.worms.filter((w) => w.alive && w.hp <= 0);
+    for (const worm of dying) this.kill(worm, 'killed');
+    for (const worm of dying) this.explode(worm.x, worm.y, BLASTS.wormDeath);
+    return dying.length > 0;
   }
 
   emit(event: SimEvent): void {
@@ -192,10 +229,23 @@ export class World implements ProjectileContext, WeaponContext {
     return events;
   }
 
+  /** Knocks a worm off its feet (and off its rope) with this much extra speed. */
+  private throwWorm(worm: Worm, vx: number, vy: number): void {
+    worm.vx += vx;
+    worm.vy += vy;
+    worm.grounded = false;
+    worm.knocked = true;
+    worm.slide = 0;
+    worm.afterTouch = 0;
+    worm.pendingJump = null;
+    worm.ropeChain = false;
+    worm.rope = null; // blasts knock worms off their rope
+  }
+
+  /** A worm brought to 0 HP stays on the map until the turn ends, then blows up. */
   private damage(worm: Worm, amount: number): void {
     worm.hp = Math.max(0, worm.hp - amount);
     this.events.push({ type: 'damage', wormId: worm.id, amount });
-    if (worm.hp === 0) this.kill(worm, 'killed');
   }
 
   private kill(worm: Worm, cause: 'drowned' | 'killed'): void {
@@ -206,19 +256,30 @@ export class World implements ProjectileContext, WeaponContext {
   }
 }
 
+/** WR's bazooka push force; PHYS.blastKnockback is the speed it gives at the centre. */
+const BAZOOKA_PUSH = 130;
+
 /**
- * How hard a blast throws something at offset (dx, dy) from its centre, or null if out of
- * reach. `power` is 1 at the centre and 0 at the edge of the reach.
+ * WR's falloff: the max within the inner range of the centre, fading evenly to the min at the
+ * outer range, and 0 beyond.
  */
-function blastPush(dx: number, dy: number, blast: Blast): { vx: number; vy: number; power: number } | null {
+function falloff(dist: number, [min, max]: [number, number], [inner, outer]: [number, number]): number {
+  if (dist >= outer) return 0;
+  if (dist <= inner) return max;
+  return max + ((min - max) * (dist - inner)) / (outer - inner);
+}
+
+/** How hard a blast throws something at offset (dx, dy) from its centre, or null if out of reach. */
+function blastPush(dx: number, dy: number, blast: Blast, underwater: boolean): { vx: number; vy: number } | null {
   const dist = Math.hypot(dx, dy);
-  if (dist >= blast.reach) return null;
-  const power = 1 - dist / blast.reach;
-  const speed = PHYS.blastKnockback * blast.push * power;
+  const force = falloff(dist, blast.push, blast.pushRange) * (underwater ? blast.waterPush : 1);
+  if (force <= 0) return null;
+  const speed = (PHYS.blastKnockback * force) / BAZOOKA_PUSH;
   const ux = dist > 0.001 ? dx / dist : 0;
   const uy = dist > 0.001 ? dy / dist : -1;
   // A little extra lift makes things fly in an arc instead of sliding along the ground.
-  return { vx: ux * speed, vy: uy * speed - PHYS.blastLift * power, power };
+  const lift = (PHYS.blastLift * blast.lift * force) / BAZOOKA_PUSH;
+  return { vx: ux * speed, vy: uy * speed - lift };
 }
 
 /** Places every team's worms on the map (alternating teams across it) and scatters mines. */

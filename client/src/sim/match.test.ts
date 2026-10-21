@@ -4,6 +4,7 @@ import { generateMap } from './mapgen';
 import { mulberry32 } from './rng';
 import { createMatch, DEFAULT_SETTINGS, Match, type MatchEvent, type MatchSettings } from './match';
 import { Terrain } from './terrain';
+import { roundBlast } from './weapons';
 import { NO_INPUT, type WormInput } from './worm';
 import { World } from './world';
 
@@ -127,7 +128,7 @@ describe('Ending a turn', () => {
   it('happens at once when the active worm gets hurt', () => {
     const match = setup(1, { turnTime: 30 });
     const worm = match.activeWorm!;
-    match.world.explode(worm.x + 20, worm.y, { radius: 10, damage: 10, reach: 30, push: 1 });
+    match.world.explode(worm.x + 20, worm.y, roundBlast(10, 10, 30, 1));
     run(match, 1);
     expect(match.phase).toBe('settling');
   });
@@ -171,7 +172,7 @@ describe('Winning', () => {
   it('is over when only one team has worms left', () => {
     const match = setup(1, { turnTime: 30 });
     const b1 = match.world.worms.find((w) => w.name === 'B1')!;
-    match.world.explode(b1.x, b1.y, { radius: 20, damage: 500, reach: 30, push: 1 });
+    match.world.explode(b1.x, b1.y, roundBlast(20, 500, 30, 1));
     const events = untilNextTurn(match);
     expect(events).toContainEqual({ type: 'gameOver', winner: 0 });
     expect(match.phase).toBe('over');
@@ -180,7 +181,7 @@ describe('Winning', () => {
   it('ends straight away when the last enemy dies mid-turn', () => {
     const match = setup(1, { turnTime: 30 });
     const b1 = match.world.worms.find((w) => w.name === 'B1')!;
-    match.world.explode(b1.x, b1.y, { radius: 20, damage: 500, reach: 30, push: 1 });
+    match.world.explode(b1.x, b1.y, roundBlast(20, 500, 30, 1));
     run(match, 1);
     expect(match.phase).toBe('settling'); // not waiting out A1's remaining 29 seconds
   });
@@ -188,7 +189,7 @@ describe('Winning', () => {
   it('is a draw when nobody is left', () => {
     const match = setup(1, { turnTime: 30 });
     for (const w of match.world.worms) {
-      match.world.explode(w.x, w.y, { radius: 20, damage: 500, reach: 30, push: 1 });
+      match.world.explode(w.x, w.y, roundBlast(20, 500, 30, 1));
     }
     const events = untilNextTurn(match);
     expect(events).toContainEqual({ type: 'gameOver', winner: null });
@@ -280,5 +281,31 @@ describe('Saving and restoring (online hand-over)', () => {
     const ground = b.mask.indexOf(1);
     b.carve(ground % b.width, Math.floor(ground / b.width) + 10, 20);
     expect(a.hash()).not.toBe(b.hash());
+  });
+});
+
+describe('Worms at 0 HP', () => {
+  it('stay until the turn ends, then blow up and can hurt worms nearby', () => {
+    const match = setup(1, { turnTime: 30 });
+    const b1 = match.world.worms.find((w) => w.name === 'B1')!;
+    const b2 = match.world.addWorm('B2', 1, b1.x + 15, restingY);
+    run(match, 10);
+    b1.hp = 0;
+    run(match, 30);
+    expect(b1.alive).toBe(true); // still standing during the turn
+    match.forceEndTurn();
+    const events = untilNextTurn(match);
+    expect(events).toContainEqual({ type: 'death', wormId: b1.id, cause: 'killed' });
+    expect(events).toContainEqual(expect.objectContaining({ type: 'explosion', x: b1.x }));
+    expect(b2.hp).toBeLessThan(100);
+    expect(events.some((e) => e.type === 'turnStart')).toBe(true);
+  });
+
+  it('count as out: bringing the last enemy to 0 HP wins the match', () => {
+    const match = setup(1, { turnTime: 30 });
+    const b1 = match.world.worms.find((w) => w.name === 'B1')!;
+    match.world.explode(b1.x, b1.y, roundBlast(10, 500, 30, 0));
+    const events = untilNextTurn(match);
+    expect(events).toContainEqual({ type: 'gameOver', winner: 0 });
   });
 });

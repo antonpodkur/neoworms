@@ -54,13 +54,14 @@ Other scripts: `npm test` (simulation tests), `npm run typecheck`, `npm run buil
 | Enter | jump (tap twice quickly: backflip) |
 | ← → in the air | steer the jump |
 | Backspace | backflip |
-| Space | fire the selected weapon (hold to charge the bazooka and grenade) |
+| Space | fire the selected weapon (hold to charge the bazooka and thrown bombs) |
+| Click the map | call in the air strike there (with the Air Strike selected) |
 | Shift | weapon menu (← → to choose, Space or Enter to pick) |
-| Tab | toggle: grenade fuse 1–5 s |
+| Tab | toggle: fuse 1–5 s for the grenade, cluster and banana bombs |
 | Space with the rope | shoot the rope / let go / shoot again mid-air |
 | ← → on rope | swing |
 | ↑ ↓ on rope | climb / descend |
-| Enter on rope | drop the selected grenade or mine |
+| Enter on rope | drop the selected grenade, cluster or banana bomb, dynamite or mine |
 | Mouse wheel | zoom |
 | Right drag / Alt + drag | pan |
 | Esc | menu: pause, resume, new match |
@@ -76,6 +77,7 @@ same map and you can share a link to a map you like.
 - Using a weapon (not the ninja rope) leaves 3 seconds of retreat time to get away; you can still
   move and swing on the rope, but not fire again.
 - Getting hurt during your own turn ends it.
+- A worm brought to 0 HP stays until the turn ends, then blows up (which can hurt its neighbours).
 - The next turn starts once everything has stopped moving: grenades gone off, worms landed.
 - Wind changes every turn and pushes bazooka shells.
 - Sudden death: after the set time the water rises at the end of every turn.

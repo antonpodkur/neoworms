@@ -170,14 +170,16 @@ export class Match {
     }
     if (this.phase !== 'playing' && this.phase !== 'retreat') return;
     // Getting hurt ends your turn on the spot, and so does wiping out the last enemy.
-    const hurt = (e.type === 'damage' || e.type === 'death') && e.wormId === this.world.activeWormId;
-    if (hurt || (e.type === 'death' && this.teamsStanding().length <= 1)) this.endTurn();
+    const harm = e.type === 'damage' || e.type === 'death';
+    const hurt = harm && e.wormId === this.world.activeWormId;
+    if (hurt || (harm && this.teamsStanding().length <= 1)) this.endTurn();
   }
 
+  /** Teams with a worm that still has health (worms at 0 HP blow up when the turn ends). */
   private teamsStanding(): number[] {
     return this.settings.teams
       .map((_, team) => team)
-      .filter((team) => this.world.worms.some((w) => w.alive && w.team === team));
+      .filter((team) => this.world.worms.some((w) => w.alive && w.hp > 0 && w.team === team));
   }
 
   private endTurn(): void {
@@ -194,7 +196,7 @@ export class Match {
 
   /** Nothing moving: worms standing, grenades and shells gone, mines lying still and quiet. */
   private isSettled(): boolean {
-    const wormsStill = this.world.worms.every((w) => !w.alive || (w.grounded && w.rope === null));
+    const wormsStill = this.world.worms.every((w) => !w.alive || (w.grounded && w.slide === 0 && w.rope === null));
     const projectilesStill = this.world.projectiles.every(
       (p) => p.kind === 'mine' && p.resting && p.fuseTicks === null,
     );
@@ -202,6 +204,12 @@ export class Match {
   }
 
   private finishTurn(): void {
+    if (this.world.detonateDying()) {
+      // Worms at 0 HP blew up; settle again, their blasts may have finished off others.
+      this.settleTicks = 0;
+      this.stillTicks = 0;
+      return;
+    }
     if (this.suddenDeath && !this.waterRisen) {
       // The sea creeps up; settle again so anyone it reaches drowns before the next turn.
       this.waterRisen = true;
@@ -249,7 +257,7 @@ export class Match {
     const worms = this.world.worms.filter((w) => w.team === team);
     for (let i = 0; i < worms.length; i++) {
       const index = (this.nextWormIndex[team] + i) % worms.length;
-      if (worms[index].alive) {
+      if (worms[index].alive && worms[index].hp > 0) {
         this.nextWormIndex[team] = index + 1;
         return worms[index];
       }
