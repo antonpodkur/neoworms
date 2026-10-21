@@ -46,6 +46,9 @@ Each milestone ends with something playable.
   - [ ] Playtest the maps and tune them (rope reach, spawn spots, how long the terrain lasts)
   - [ ] Later: themes (soil/stone textures, backdrops), more maps
 - [ ] **7 · Polish**: sprites, animations, sound, particles, gamepad
+  - [x] Worm sprites rendered from Blender (`npm run sprites`, [docs/art.md](docs/art.md)): placeholder worm with idle, walk, jump, fly and bazooka aiming
+  - [ ] The hand-made worm, more animations (backflip, rope swing, weapon draw, hurt, death, drowning, victory), aim poses for every weapon, hats
+  - [ ] Terrain look (materials, rounded edges, dark craters), themes with parallax backdrops, water, explosions
 
 ## Rope design notes (milestone 2)
 

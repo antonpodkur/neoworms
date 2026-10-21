@@ -26,7 +26,9 @@ import { TerrainView } from './TerrainView';
 import { physicsChanges, showMapPicker, toggleTuningPanel, useHostPhysics, useOwnPhysics } from './TuningPanel';
 import { WaterView } from './WaterView';
 import { WeaponPanel, weaponForKey } from './WeaponPanel';
-import { teamColor, teamColorCss, WormView } from './WormView';
+import { createWormAnims, teamColor, teamColorCss, WORM_SHEET, WormView } from './WormView';
+import wormAtlasUrl from '../../sprites/worm.json?url';
+import wormSheetUrl from '../../sprites/worm.png?url';
 
 const STEP_MS = DT * 1000;
 const MIN_ZOOM = 0.35;
@@ -137,6 +139,7 @@ export class GameScene extends Phaser.Scene {
   preload(): void {
     const key = imageKey(this.map);
     if (this.map.kind === 'image' && !this.textures.exists(key)) this.load.image(key, this.map.url);
+    if (!this.textures.exists(WORM_SHEET)) this.load.atlas(WORM_SHEET, wormSheetUrl, wormAtlasUrl);
   }
 
   create(): void {
@@ -157,6 +160,7 @@ export class GameScene extends Phaser.Scene {
     const headroom = map.enclosed ? 0 : SKY_HEADROOM;
     this.addBackdrop(map.enclosed ? 'cave' : 'sky', terrain.width, terrain.height, headroom);
     this.terrainView = new TerrainView(this, terrain, DEPTH.terrain);
+    createWormAnims(this);
     for (const worm of this.world.worms) this.wormViews.set(worm.id, new WormView(this, worm));
     this.water = new WaterView(this, DEPTH.water);
     this.ropeView = new RopeView(this, DEPTH.rope);
@@ -201,8 +205,9 @@ export class GameScene extends Phaser.Scene {
     else this.watchOnline(delta);
 
     const alpha = this.online && this.watching ? this.watchAlpha : this.accumulator / STEP_MS;
+    const aimingId = this.match.phase === 'playing' ? this.match.activeWorm?.id : undefined;
     for (const worm of this.world.worms) {
-      if (worm.alive) this.wormViews.get(worm.id)?.update(worm, alpha);
+      if (worm.alive) this.wormViews.get(worm.id)?.update(worm, alpha, worm.id === aimingId);
     }
     this.terrainView.flush();
     this.ropeView.update(this.world.worms, this.wormViews);
@@ -439,7 +444,7 @@ export class GameScene extends Phaser.Scene {
         case 'death': {
           const worm = this.world.worms[e.wormId];
           if (e.cause === 'drowned') splash(this, worm.x, this.world.waterLevel);
-          this.wormViews.get(e.wormId)?.update(worm, 1); // show its final health while it fades
+          this.wormViews.get(e.wormId)?.update(worm, 1, false); // show its final health while it fades
           this.wormViews.get(e.wormId)?.die(e.cause);
           this.wormViews.delete(e.wormId);
           break;

@@ -11,6 +11,7 @@
     "build": "npm run build -w client",
     "test": "npm test -w client",
     "typecheck": "npm run typecheck --workspaces",
-    "maps": "npm run maps -w client"
+    "maps": "npm run maps -w client",
+    "sprites": "npm run sprites -w client"
   }
 }
