@@ -43,6 +43,26 @@ export class TerrainView {
     this.dirty.push(rect);
   }
 
+  /**
+   * Colours (0xRRGGBB) of up to `count` random ground pixels within `r` of (x, y), as drawn
+   * now. Called before the next flush, that's the ground a hole just blew away.
+   */
+  colorsAround(x: number, y: number, r: number, count: number): number[] {
+    const { pixels } = this.painter;
+    const { width, height } = this.texture;
+    const colors: number[] = [];
+    for (let tries = 0; tries < count * 4 && colors.length < count; tries++) {
+      const a = Math.random() * Math.PI * 2;
+      const d = Math.sqrt(Math.random()) * r;
+      const px = Math.round(x + Math.cos(a) * d);
+      const py = Math.round(y + Math.sin(a) * d);
+      if (px < 0 || py < 0 || px >= width || py >= height) continue;
+      const o = (py * width + px) * 4;
+      if (pixels[o + 3] === 255) colors.push((pixels[o] << 16) | (pixels[o + 1] << 8) | pixels[o + 2]);
+    }
+    return colors;
+  }
+
   /** Repaints and uploads what changed, at most once per frame however many holes were made. */
   flush(): void {
     for (const rect of this.dirty) {
