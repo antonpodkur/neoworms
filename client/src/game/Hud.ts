@@ -10,6 +10,12 @@ export interface TurnInfo {
   phase: 'playing' | 'retreat' | 'settling';
 }
 
+export interface GameOverButton {
+  label: string;
+  primary?: boolean;
+  onClick: () => void;
+}
+
 export interface TeamInfo {
   name: string;
   hp: number;
@@ -78,14 +84,22 @@ export class Hud {
     this.bannerTimer = window.setTimeout(() => this.banner.classList.remove('visible'), ms);
   }
 
-  showGameOver(text: string, color: string, onRematch: () => void, onNewMatch: () => void): void {
-    this.gameOver.innerHTML = `<h2></h2><div class="actions">
-      <button class="rematch">Rematch</button><button class="new">New match</button></div>`;
+  /** A big title with buttons, e.g. who won with Rematch / New match, or "The host left". */
+  showGameOver(text: string, color: string, buttons: GameOverButton[], note = ''): void {
+    this.gameOver.innerHTML = `<h2></h2><p class="note"></p><div class="actions"></div>`;
     const title = this.gameOver.querySelector('h2')!;
     title.textContent = text;
     title.style.color = color;
-    this.gameOver.querySelector('.rematch')!.addEventListener('click', onRematch);
-    this.gameOver.querySelector('.new')!.addEventListener('click', onNewMatch);
+    this.gameOver.querySelector('.note')!.textContent = note;
+    this.gameOver.querySelector('.actions')!.replaceChildren(
+      ...buttons.map((b) => {
+        const button = document.createElement('button');
+        button.textContent = b.label;
+        if (b.primary) button.className = 'start';
+        button.addEventListener('click', b.onClick);
+        return button;
+      }),
+    );
     this.gameOver.hidden = false;
   }
 

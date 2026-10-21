@@ -47,6 +47,15 @@ export class Terrain {
     this.fillCircle(cx, cy, r, false);
   }
 
+  /** FNV-1a fingerprint of which pixels are ground, to check two players built the same map. */
+  hash(): number {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < this.mask.length; i++) {
+      h = Math.imul(h ^ (this.mask[i] === 0 ? 0 : 1), 0x01000193);
+    }
+    return h >>> 0;
+  }
+
   /** True if a disc of radius r at (cx, cy) touches no ground. */
   discFree(cx: number, cy: number, r: number): boolean {
     const offsets = discOffsets(r);

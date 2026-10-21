@@ -30,6 +30,13 @@ Each milestone ends with something playable.
 - [x] **4 · Same-screen match**: setup screen (2–4 teams, worms, turn time, health, sudden death, map), turns with timer, retreat time, settle-before-next-turn, wind per turn, sudden death (rising water), team health bars, win screen with rematch
   - Later: ammo limits per weapon (schemes), worms exploding at 0 HP at the end of a turn (WR "WormDeathBlast")
 - [ ] **5 · Online**: lobby with room codes, team/worm names, host picks map + settings, streaming, disconnect handling
+  - [x] Repo split into `client/`, `server/`, `shared/` (npm workspaces)
+  - [x] Relay on Cloudflare (PartyServer / Durable Objects): rooms by 4-letter code, host/guest, forwarding
+  - [x] Lobby (host, join by code or invite link), host's physics and settings for everyone, terrain checksum
+  - [x] The turn's player runs the game and streams frames; others play them back; hand-over each turn
+  - [x] A player leaving: their turns are skipped; the host leaving ends the game for the others
+  - [ ] Deploy the relay (needs a Cloudflare login) and host the game (e.g. GitHub Pages)
+  - [ ] Later: rejoin after a page reload, spectators, chat
 - [ ] **6 · Maps & content**: themes, import a map from an image, more weapons, crates, barrels
 - [ ] **7 · Polish**: sprites, animations, sound, particles, gamepad
 

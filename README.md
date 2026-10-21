@@ -1,8 +1,7 @@
 # NeoWorms
 
-A Worms-style artillery game for the browser. Currently a hot-seat game: 2–4 teams take turns on
-one computer (milestone 4);
-see [ROADMAP.md](ROADMAP.md) for where it's headed.
+A Worms-style artillery game for the browser: 2–4 teams take turns, on one computer or online
+(milestone 5). See [ROADMAP.md](ROADMAP.md) for where it's headed.
 
 ## Run it
 
@@ -11,8 +10,31 @@ npm install
 npm run dev
 ```
 
-Then open the URL Vite prints (usually http://localhost:5173). The setup screen picks teams,
-worms per team, turn time, worm health, when sudden death starts, and the map.
+Then open the URL Vite prints (usually http://localhost:5173). The menu has two tabs:
+
+- **This computer**: hot-seat. Pick teams, worms per team, turn time, worm health, when sudden
+  death starts, and the map.
+- **Online**: host a game (you get a 4-letter room code and an invite link) or join one with a
+  code. Each player is one team; the host picks the settings and starts the match.
+
+Online play needs the relay. To try it on one machine (e.g. two browser tabs), run it too:
+
+```bash
+npm run dev:server
+```
+
+To play with friends over the internet, deploy the relay once (it's a free Cloudflare Worker),
+then point the game at it:
+
+```bash
+cd server
+npx wrangler login
+npm run deploy
+```
+
+The deploy prints the relay's address, e.g. `neoworms-relay.<you>.workers.dev`. Put it in
+`client/.env.local` as `VITE_RELAY_HOST=neoworms-relay.<you>.workers.dev` (see
+`client/.env.example`) and restart `npm run dev`. Everyone playing needs the same setting.
 
 Other scripts: `npm test` (simulation tests), `npm run typecheck`, `npm run build`.
 
@@ -58,8 +80,9 @@ Besides the generated maps, any PNG in `maps/` becomes a map: dark pixels are ai
 is ground (green-tinted ground is drawn as stone).
 
 Worms Revolution level outlines can be used locally: copy the `08_maps/*.png` files from your
-own export into `maps/wr/`. That folder is git-ignored and only the dev server serves it, so the
+own export into `client/maps/wr/`. That folder is git-ignored and only the dev server serves it, so the
 files never end up in git or in a production build (they're Team17's, for personal use only).
+Online, a Worms Revolution map only works if every player has it.
 See [docs/wr-reference.md](docs/wr-reference.md) for what else we took from the game.
 
 ## Tuning
@@ -70,7 +93,14 @@ browser; **Copy values** copies just the ones you changed, ready to paste into a
 
 ## Layout
 
-- `src/sim/`: game simulation in plain TypeScript (terrain, map generation, worm physics,
-  ninja rope, world). No Phaser imports, unit-tested in `*.test.ts`.
-- `src/game/`: Phaser scene and views that draw the simulation and feed it input.
-- `src/sim/constants.ts`: physics tuning values (gravity, walk speed, jump strength, damage).
+npm workspaces: `npm install` at the root installs everything.
+
+- `client/`: the game (Vite + Phaser).
+  - `src/sim/`: game simulation and match rules in plain TypeScript (terrain, map generation,
+    worm physics, ninja rope, weapons, turns). No Phaser imports, unit-tested in `*.test.ts`.
+  - `src/sim/constants.ts`: physics tuning values; `src/sim/weapons.ts`: weapons and blasts.
+  - `src/game/`: Phaser scene, views, HUD and menus.
+  - `src/net/`: online play (room connection, sending and playing back game frames).
+- `server/`: the relay, a Cloudflare Worker with one Durable Object per room. It only forwards
+  messages; the game runs in the players' browsers.
+- `shared/`: message types used by both.

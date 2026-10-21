@@ -1,7 +1,10 @@
 node_modules
 dist
+.wrangler
+.dev.vars
+.env.local
 .DS_Store
 *.log
 
 # Worms Revolution assets extracted from a personal copy: personal use only (Team17's), never commit.
-maps/wr/
+client/maps/wr/

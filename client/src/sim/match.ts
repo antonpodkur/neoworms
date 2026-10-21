@@ -1,7 +1,7 @@
 import { TICK_RATE } from './constants';
 import type { GeneratedMap } from './mapgen';
 import { wormName } from './names';
-import { createWorld, type SimEvent, type World } from './world';
+import { createWorld, type SimEvent, type World, type WorldState } from './world';
 import { NO_INPUT, type Worm, type WormInput } from './worm';
 
 export interface MatchSettings {
@@ -41,6 +41,22 @@ export type MatchEvent =
   | { type: 'turnStart'; team: number; wormId: number }
   | { type: 'suddenDeath' }
   | { type: 'gameOver'; winner: number | null };
+
+/** Everything about a match that changes during play, world included (terrain aside). */
+export interface MatchState {
+  world: WorldState;
+  phase: MatchPhase;
+  turnTeam: number;
+  /** null stands for Infinity (no time limit), which JSON can't carry. */
+  ticksLeft: number | null;
+  elapsedTicks: number;
+  suddenDeath: boolean;
+  winner: number | null;
+  settleTicks: number;
+  stillTicks: number;
+  waterRisen: boolean;
+  nextWormIndex: number[];
+}
 
 /** Everything must stay still this long before the next turn starts. */
 const SETTLE_TICKS = Math.round(0.5 * TICK_RATE);
@@ -101,6 +117,42 @@ export class Match {
       this.stillTicks = this.isSettled() ? this.stillTicks + 1 : 0;
       if (this.stillTicks >= SETTLE_TICKS || this.settleTicks >= MAX_SETTLE_TICKS) this.finishTurn();
     }
+  }
+
+  /** Ends the current turn right away (e.g. its player left an online game). */
+  forceEndTurn(): void {
+    if (this.phase === 'playing' || this.phase === 'retreat') this.endTurn();
+  }
+
+  snapshot(): MatchState {
+    return {
+      world: this.world.snapshot(),
+      phase: this.phase,
+      turnTeam: this.turnTeam,
+      ticksLeft: Number.isFinite(this.ticksLeft) ? this.ticksLeft : null,
+      elapsedTicks: this.elapsedTicks,
+      suddenDeath: this.suddenDeath,
+      winner: this.winner,
+      settleTicks: this.settleTicks,
+      stillTicks: this.stillTicks,
+      waterRisen: this.waterRisen,
+      nextWormIndex: [...this.nextWormIndex],
+    };
+  }
+
+  /** Takes over a snapshot from another browser (the terrain must already match). */
+  restore(state: MatchState): void {
+    this.world.restore(state.world);
+    this.phase = state.phase;
+    this.turnTeam = state.turnTeam;
+    this.ticksLeft = state.ticksLeft ?? Infinity;
+    this.elapsedTicks = state.elapsedTicks;
+    this.suddenDeath = state.suddenDeath;
+    this.winner = state.winner;
+    this.settleTicks = state.settleTicks;
+    this.stillTicks = state.stillTicks;
+    this.waterRisen = state.waterRisen;
+    this.nextWormIndex.splice(0, this.nextWormIndex.length, ...state.nextWormIndex);
   }
 
   /** Returns and clears world and match events since the last call. */

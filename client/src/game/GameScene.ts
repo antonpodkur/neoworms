@@ -7,6 +7,15 @@ import type { Terrain } from '../sim/terrain';
 import { WEAPONS, type WeaponId } from '../sim/weapons';
 import type { World } from '../sim/world';
 import { NO_INPUT, type Worm, type WormInput } from '../sim/worm';
+import {
+  closeSession,
+  currentSession,
+  newRoomCode,
+  openSession,
+  type Frame,
+  type OnlineSession,
+  type OnlineStart,
+} from '../net/OnlineSession';
 import { DEPTH } from './depth';
 import { explosionFlash, floatingText, splash } from './effects';
 import { Hud } from './Hud';
@@ -15,7 +24,7 @@ import { ProjectileView } from './ProjectileView';
 import { RopeView } from './RopeView';
 import { loadSettings, SetupScreen } from './SetupScreen';
 import { TerrainView } from './TerrainView';
-import { showMapPicker, toggleTuningPanel } from './TuningPanel';
+import { physicsChanges, showMapPicker, toggleTuningPanel, useHostPhysics, useOwnPhysics } from './TuningPanel';
 import { WaterView } from './WaterView';
 import { WeaponPanel } from './WeaponPanel';
 import { teamColor, teamColorCss, WormView } from './WormView';
@@ -34,21 +43,30 @@ const BACKDROPS = {
   sky: ['#16325c', '#4f86c0', '#a9cfe6'],
   cave: ['#140e0b', '#2b1e17', '#46332a'],
 };
+/** Online: the player running the game sends its state this often (ticks): 20 times a second. */
+const FRAME_TICKS = 3;
+/** Online: watchers play frames back this many ticks behind the newest, to smooth out jitter... */
+const PLAYBACK_DELAY = 6;
+/** ...and jump ahead if they fall further behind than this. */
+const MAX_PLAYBACK_LAG = 30;
 
 interface SceneData {
   mapId?: string;
   seed?: number;
   settings?: MatchSettings;
-  /** Start playing right away instead of showing the setup screen. */
+  /** Start playing right away instead of showing the menu. */
   autostart?: boolean;
+  /** An online match: everyone builds it from the same start. */
+  online?: OnlineStart;
 }
 
 /**
- * A hot-seat match: the Match (rules) and World (physics) run at a fixed tick; this scene
- * feeds them the keyboard and draws them. Before the first turn, and on Esc, the setup
- * screen is shown over the paused game.
- * The map and seed live in the URL (?map=rope-gym&seed=42), so a reload keeps the same map.
- * Image maps load in preload(); generated ones are built in create().
+ * A match, hot-seat on this computer or online. The Match (rules) and World (physics) run at
+ * a fixed tick; this scene feeds them the keyboard and draws them.
+ *
+ * Online, one browser runs the game at a time: the one whose player has the turn (or the
+ * host, covering for a player who left). It sends frames of state and events; everyone else
+ * plays those back. When the turn passes to another player, so does running the game.
  */
 export class GameScene extends Phaser.Scene {
   match!: Match;
@@ -57,6 +75,9 @@ export class GameScene extends Phaser.Scene {
   private seed = 0;
   private settings!: MatchSettings;
   private autostart = false;
+  private online: OnlineStart | null = null;
+  private session: OnlineSession | null = null;
+  private joinCode = '';
   private terrainView!: TerrainView;
   private water!: WaterView;
   private wormViews = new Map<number, WormView>();
@@ -73,25 +94,42 @@ export class GameScene extends Phaser.Scene {
   private picked: WeaponId | null = null;
   private accumulator = 0;
   private followActive = true;
+  /** Online: events since the last frame we sent. */
+  private unsentEvents: MatchEvent[] = [];
+  /** Online: frames waiting to be played back, and where playback is. */
+  private frames: Frame[] = [];
+  private playbackTick = -1;
+  private lastFrameTick = 0;
+  private watching = false;
+  private watchAlpha = 1;
+  private peerNames = new Map<string, string>();
 
   constructor() {
     super('game');
   }
 
   init(data: SceneData): void {
-    // On first load the URL picks the map; after that the setup screen and map picker do.
+    // On first load the URL picks the map (or a room to join); after that the menu does.
     const url = new URLSearchParams(location.search);
     const urlSeed = Number(url.get('seed'));
-    const firstLoad = !data.mapId;
-    this.map = findMap(data.mapId ?? url.get('map')) ?? MAPS[0];
-    this.seed = data.seed ?? (firstLoad && urlSeed > 0 ? urlSeed : randomSeed());
-    this.settings = data.settings ?? loadSettings();
-    this.autostart = data.autostart ?? false;
+    const firstLoad = !data.mapId && !data.online;
+    this.online = data.online ?? null;
+    this.session = currentSession();
+    this.joinCode = firstLoad ? (url.get('join') ?? '').toUpperCase() : '';
+    this.map = findMap(data.online?.mapId ?? data.mapId ?? url.get('map')) ?? MAPS[0];
+    this.seed = data.online?.seed ?? data.seed ?? (firstLoad && urlSeed > 0 ? urlSeed : randomSeed());
+    this.settings = data.online?.settings ?? data.settings ?? loadSettings();
+    this.autostart = !!data.online || (data.autostart ?? false);
     this.wormViews = new Map();
     this.pressed = { jump: false, backflip: false, fire: false, toggle: false };
     this.picked = null;
     this.accumulator = 0;
     this.followActive = true;
+    this.unsentEvents = [];
+    this.frames = [];
+    this.playbackTick = -1;
+    this.lastFrameTick = 0;
+    this.watching = false;
   }
 
   preload(): void {
@@ -100,11 +138,18 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
+    if (this.online && !this.session?.isHost) useHostPhysics(this.online.physics);
     this.match = createMatch(this.buildMap(), this.seed, this.settings);
     this.world = this.match.world;
     const { terrain } = this.world;
-    history.replaceState(null, '', `?${new URLSearchParams({ map: this.map.id, seed: String(this.seed) })}`);
-    showMapPicker(MAPS, this.map.id, (mapId) => this.newMatch(this.settings, mapId));
+    const query: Record<string, string> = this.session
+      ? { join: this.session.code }
+      : { map: this.map.id, seed: String(this.seed) };
+    history.replaceState(null, '', `?${new URLSearchParams(query)}`);
+    showMapPicker(MAPS, this.map.id, (mapId) => {
+      if (!this.session) this.newMatch(this.settings, mapId);
+      else if (this.session.isHost) this.startOnline(this.settings, mapId);
+    });
 
     const enclosed = isEnclosed(this.map, terrain);
     const headroom = enclosed ? 0 : SKY_HEADROOM;
@@ -121,28 +166,39 @@ export class GameScene extends Phaser.Scene {
     this.aimGfx = this.add.graphics().setDepth(DEPTH.labels);
     this.hud = new Hud();
     this.hud.hideGameOver();
-    this.setup = new SetupScreen(
-      MAPS,
-      (settings, mapId) => this.newMatch(settings, mapId),
-      () => this.setKeyboard(true),
-    );
+    this.setup = new SetupScreen(MAPS, {
+      startLocal: (settings, mapId) => this.newMatch(settings, mapId),
+      startOnline: (settings, mapId) => this.startOnline(settings, mapId),
+      host: (name) => this.enterRoom(newRoomCode(), name, true),
+      join: (code, name) => this.enterRoom(code, name, false),
+      leave: () => this.leaveOnline(),
+      resume: () => this.setKeyboard(true),
+    });
     this.setupCamera(terrain.width, terrain.height, headroom);
     this.setupInput();
+    this.listenToSession();
 
-    if (this.autostart) this.match.start();
-    else this.openSetup();
+    if (this.online && this.session) {
+      const terrainHash = terrain.hash();
+      if (this.session.isHost) this.session.sendStart({ ...this.online, terrainHash });
+      else if (terrainHash !== this.online.terrainHash) {
+        this.showLeaveScreen("Your map doesn't match the host's", 'Make sure you both have the same version of the game.');
+      }
+    }
+    if (this.autostart) {
+      // The menu may still be up, e.g. a guest's lobby when the host started the match.
+      this.setup.close();
+      this.match.start();
+      this.handleEvents(this.match.drainEvents());
+    } else this.openSetup();
   }
 
   update(time: number, delta: number): void {
-    // Cap the catch-up after a stall (e.g. a background tab) instead of fast-forwarding.
-    this.accumulator += Math.min(delta, 250);
-    while (this.accumulator >= STEP_MS) {
-      if (!this.setup.isOpen) this.match.step(this.readInput());
-      this.accumulator -= STEP_MS;
-    }
-    this.handleEvents(this.match.drainEvents());
+    if (!this.online) this.playLocal(delta);
+    else if (this.isRunningGame()) this.runOnline(delta);
+    else this.watchOnline(delta);
 
-    const alpha = this.accumulator / STEP_MS;
+    const alpha = this.online && this.watching ? this.watchAlpha : this.accumulator / STEP_MS;
     for (const worm of this.world.worms) {
       if (worm.alive) this.wormViews.get(worm.id)?.update(worm, alpha);
     }
@@ -155,19 +211,170 @@ export class GameScene extends Phaser.Scene {
     this.updateHud();
   }
 
-  /** Starts a fresh match (new seed) with these settings on this map. */
+  /** Hot-seat: step the match with the keyboard; the menu pauses it. */
+  private playLocal(delta: number): void {
+    // Cap the catch-up after a stall (e.g. a background tab) instead of fast-forwarding.
+    this.accumulator += Math.min(delta, 250);
+    while (this.accumulator >= STEP_MS) {
+      if (!this.setup.isOpen) this.match.step(this.readInput());
+      this.accumulator -= STEP_MS;
+    }
+    this.handleEvents(this.match.drainEvents());
+  }
+
+  /** Online, running the game: step it and send frames until the turn passes to someone else. */
+  private runOnline(delta: number): void {
+    if (this.watching) {
+      // Just took over: first catch up with everything the previous player sent.
+      this.watching = false;
+      this.accumulator = 0;
+      for (const frame of [...this.frames, ...this.session!.takeFrames()]) this.applyFrame(frame);
+      this.frames = [];
+    }
+    this.accumulator += Math.min(delta, 250);
+    while (this.accumulator >= STEP_MS) {
+      this.accumulator -= STEP_MS;
+      // A player who left can't take their turn; skip it.
+      if (!this.session!.isPresent(this.online!.owners[this.match.turnTeam])) this.match.forceEndTurn();
+      // The game keeps running while the menu is open: the others are waiting.
+      this.match.step(this.setup.isOpen ? NO_INPUT : this.readInput());
+      const events = this.match.drainEvents();
+      this.handleEvents(events);
+      this.unsentEvents.push(...events);
+      const handedOver = !this.isRunningGame();
+      const urgent = events.some((e) => e.type === 'turnStart' || e.type === 'gameOver');
+      if (handedOver || urgent || this.world.tick % FRAME_TICKS === 0) this.sendFrame();
+      if (handedOver) break;
+    }
+  }
+
+  /** Online, watching: play back received frames a little behind, for smooth movement. */
+  private watchOnline(delta: number): void {
+    this.watching = true;
+    this.frames.push(...this.session!.takeFrames());
+    if (this.frames.length === 0) return;
+    const newest = this.frames[this.frames.length - 1].tick;
+    if (this.playbackTick < 0 || newest - this.playbackTick > MAX_PLAYBACK_LAG) {
+      this.playbackTick = newest - PLAYBACK_DELAY;
+    }
+    this.playbackTick = Math.min(this.playbackTick + delta / STEP_MS, newest);
+    while (this.frames.length > 0 && this.frames[0].tick <= this.playbackTick) this.applyFrame(this.frames.shift()!);
+    this.watchAlpha = Phaser.Math.Clamp((this.playbackTick - this.lastFrameTick) / FRAME_TICKS, 0, 1);
+  }
+
+  private sendFrame(): void {
+    this.session!.sendFrame({ tick: this.world.tick, state: this.match.snapshot(), events: this.unsentEvents });
+    this.unsentEvents = [];
+  }
+
+  /** Shows a frame: its events (craters, damage...), then its state. */
+  private applyFrame(frame: Frame): void {
+    for (const e of frame.events) if (e.type === 'carve') this.world.terrain.carve(e.x, e.y, e.r);
+    this.handleEvents(frame.events);
+    const worms = new Map(this.world.worms.map((w) => [w.id, w]));
+    const projectiles = new Map(this.world.projectiles.map((p) => [p.id, p]));
+    this.match.restore(frame.state);
+    // Draw everything moving from where it was in the previous frame.
+    for (const w of this.world.worms) {
+      w.prevX = worms.get(w.id)?.x ?? w.x;
+      w.prevY = worms.get(w.id)?.y ?? w.y;
+    }
+    for (const p of this.world.projectiles) {
+      p.prevX = projectiles.get(p.id)?.x ?? p.x;
+      p.prevY = projectiles.get(p.id)?.y ?? p.y;
+    }
+    this.lastFrameTick = frame.tick;
+  }
+
+  /** Online: whose browser runs the game now. The turn's player, or the host if they left. */
+  private isRunningGame(): boolean {
+    const session = this.session!;
+    const owner = this.online!.owners[Math.max(0, this.match.turnTeam)];
+    return (session.isPresent(owner) ? owner : session.hostId) === session.myId;
+  }
+
+  /** Starts a fresh hot-seat match (new seed) with these settings on this map. */
   private newMatch(settings: MatchSettings, mapId: string): void {
     this.scene.restart({ mapId, settings, autostart: true } satisfies SceneData);
+  }
+
+  /** Host: everyone in the room gets a team, host first; the scene sends the start on build. */
+  private startOnline(settings: MatchSettings, mapId: string): void {
+    const session = this.session!;
+    const players = [...session.peers].sort((a, b) => Number(b.host) - Number(a.host));
+    const start: OnlineStart = {
+      settings: { ...settings, teams: players.map((p) => p.name) },
+      mapId,
+      seed: randomSeed(),
+      owners: players.map((p) => p.id),
+      physics: physicsChanges(),
+      terrainHash: 0,
+    };
+    this.scene.restart({ online: start } satisfies SceneData);
+  }
+
+  private enterRoom(code: string, name: string, host: boolean): void {
+    this.session = openSession(code, name, host);
+    this.listenToSession();
+    this.setup.refresh(this.session);
+    history.replaceState(null, '', `?${new URLSearchParams({ join: code })}`);
+  }
+
+  private leaveOnline(): void {
+    closeSession();
+    this.session = null;
+    useOwnPhysics();
+    this.scene.restart({ mapId: this.map.id } satisfies SceneData);
+  }
+
+  private listenToSession(): void {
+    const session = this.session;
+    if (!session) return;
+    this.peerNames = new Map(session.peers.map((p) => [p.id, p.name]));
+    session.onChange = () => {
+      this.setup.refresh(session);
+      this.onPeersChanged(session);
+    };
+    session.onStart = (start) => {
+      if (!findMap(start.mapId)) {
+        session.error = `You don't have the map "${start.mapId}". Worms Revolution maps need your own copy in client/maps/wr.`;
+        this.setup.refresh(session);
+        return;
+      }
+      this.scene.restart({ online: start } satisfies SceneData);
+    };
+  }
+
+  private onPeersChanged(session: OnlineSession): void {
+    const now = new Map(session.peers.map((p) => [p.id, p.name]));
+    if (this.online) {
+      for (const [id, name] of this.peerNames) if (!now.has(id)) this.hud.showBanner(`${name} left the game`);
+      if (!session.isHost && !session.hostId && this.match.phase !== 'over') {
+        this.showLeaveScreen('The host left the game');
+      }
+    }
+    this.peerNames = now;
+  }
+
+  private showLeaveScreen(title: string, note = ''): void {
+    this.weaponPanel.close();
+    this.hud.showGameOver(title, '#ffffff', [{ label: 'Back to menu', primary: true, onClick: () => this.leaveOnline() }], note);
   }
 
   private openSetup(): void {
     this.weaponPanel.close();
     this.setKeyboard(false);
     const inProgress = this.match.phase !== 'waiting' && this.match.phase !== 'over';
-    this.setup.open(this.settings, this.map.id, inProgress);
+    this.setup.open({
+      settings: this.settings,
+      mapId: this.map.id,
+      canResume: inProgress,
+      session: this.session,
+      joinCode: this.joinCode,
+    });
   }
 
-  /** The game ignores the keyboard while the setup screen is up, so team names can be typed. */
+  /** The game ignores the keyboard while the menu is up, so names can be typed. */
   private setKeyboard(enabled: boolean): void {
     const kb = this.input.keyboard!;
     kb.enabled = enabled;
@@ -251,24 +458,37 @@ export class GameScene extends Phaser.Scene {
           }
           break;
         }
-        case 'suddenDeath':
-          break; // announced with the turn that follows
         case 'gameOver':
-          this.weaponPanel.close();
-          this.hud.showGameOver(
-            e.winner === null ? 'Draw!' : `${this.settings.teams[e.winner]} wins!`,
-            e.winner === null ? '#ffffff' : teamColorCss(e.winner),
-            () => this.newMatch(this.settings, this.map.id),
-            () => {
-              this.hud.hideGameOver();
-              this.openSetup();
-            },
-          );
+          this.showGameOver(e.winner);
           break;
+        case 'suddenDeath': // announced with the turn that follows
         case 'mineTriggered':
         case 'weaponUsed':
           break;
       }
+    }
+  }
+
+  private showGameOver(winner: number | null): void {
+    this.weaponPanel.close();
+    const title = winner === null ? 'Draw!' : `${this.settings.teams[winner]} wins!`;
+    const color = winner === null ? '#ffffff' : teamColorCss(winner);
+    const backToMenu = () => {
+      this.hud.hideGameOver();
+      this.openSetup();
+    };
+    if (!this.session) {
+      this.hud.showGameOver(title, color, [
+        { label: 'Rematch', primary: true, onClick: () => this.newMatch(this.settings, this.map.id) },
+        { label: 'New match', onClick: backToMenu },
+      ]);
+    } else if (this.session.isHost) {
+      this.hud.showGameOver(title, color, [
+        { label: 'Rematch', primary: true, onClick: () => this.startOnline(this.settings, this.map.id) },
+        { label: 'Back to lobby', onClick: backToMenu },
+      ]);
+    } else {
+      this.hud.showGameOver(title, color, [{ label: 'Leave', onClick: () => this.leaveOnline() }], 'Waiting for the host to start another match…');
     }
   }
 
@@ -292,8 +512,9 @@ export class GameScene extends Phaser.Scene {
     onPress('TAB', press('toggle'));
     onPress('SHIFT', () => {
       const worm = this.match.activeWorm;
+      const mine = !this.online || this.isRunningGame();
       if (panel.isOpen) panel.close();
-      else if (worm && worm.charge === null) panel.open(worm.weapon); // not mid-charge: it'd fire
+      else if (worm && mine && worm.charge === null) panel.open(worm.weapon); // not mid-charge: it'd fire
     });
     onPress('ESC', () => (panel.isOpen ? panel.close() : this.openSetup()));
     for (const [key, step] of [['LEFT', -1], ['UP', -1], ['RIGHT', 1], ['DOWN', 1]] as const) {
@@ -410,7 +631,8 @@ export class GameScene extends Phaser.Scene {
 
   private updateHud(): void {
     const { phase, turnTeam, ticksLeft, settings } = this.match;
-    this.hud.setInfo([`${this.map.name} · seed ${this.seed}`, 'H: help · Esc: menu']);
+    const where = this.session ? `Online · room ${this.session.code}` : `${this.map.name} · seed ${this.seed}`;
+    this.hud.setInfo([where, 'H: help · Esc: menu']);
     const worm = this.world.worms[this.world.activeWormId];
     const showTurn = phase === 'playing' || phase === 'retreat' || phase === 'settling';
     this.hud.setTurn(

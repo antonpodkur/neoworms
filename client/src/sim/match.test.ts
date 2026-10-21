@@ -237,3 +237,48 @@ describe('Settling', () => {
     }
   });
 });
+
+describe('Saving and restoring (online hand-over)', () => {
+  it('a restored match carries on exactly like the original', () => {
+    const settings = { ...DEFAULT_SETTINGS, wormsPerTeam: 2 };
+    const original = createMatch(generateMap('one-island', 99), 99, settings);
+    original.start();
+    const keys: Partial<WormInput>[] = [
+      ...Array(20).fill({}),
+      { right: true },
+      ...Array(15).fill({ right: true, up: true }),
+      { select: 'bazooka' },
+      { fire: true, fireHeld: true },
+      ...Array(30).fill({ fireHeld: true }),
+      {},
+    ];
+    for (const k of keys) original.step({ ...NO_INPUT, ...k });
+    expect(original.world.projectiles.some((p) => p.kind === 'shell')).toBe(true); // mid-flight
+
+    // Sent over the network as JSON, then loaded into a match built from the same map.
+    const copy = createMatch(generateMap('one-island', 99), 99, settings);
+    copy.restore(JSON.parse(JSON.stringify(original.snapshot())));
+    for (let i = 0; i < 400; i++) {
+      original.step(NO_INPUT);
+      copy.step(NO_INPUT);
+    }
+    expect(copy.snapshot()).toEqual(original.snapshot());
+    expect(copy.world.terrain.hash()).toBe(original.world.terrain.hash()); // same crater
+  });
+
+  it('keeps "no time limit" through JSON', () => {
+    const match = setup(1, { turnTime: 0 });
+    const copy = setup(1, { turnTime: 0 });
+    copy.restore(JSON.parse(JSON.stringify(match.snapshot())));
+    expect(copy.ticksLeft).toBe(Infinity);
+  });
+
+  it('fingerprints the terrain so players can check they built the same map', () => {
+    const a = generateMap('two-islands', 5).terrain;
+    const b = generateMap('two-islands', 5).terrain;
+    expect(a.hash()).toBe(b.hash());
+    const ground = b.mask.indexOf(1);
+    b.carve(ground % b.width, Math.floor(ground / b.width) + 10, 20);
+    expect(a.hash()).not.toBe(b.hash());
+  });
+});

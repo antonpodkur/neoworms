@@ -94,6 +94,25 @@ export function showMapPicker(maps: { id: string; name: string }[], current: str
   mapController.updateDisplay();
 }
 
+/** This player's tweaks, sent by an online host so everyone simulates the same physics. */
+export function physicsChanges(): Partial<Physics> {
+  return changedValues();
+}
+
+/** Plays with the host's physics for an online match (not saved as this player's tuning). */
+export function useHostPhysics(changes: Partial<Physics>): void {
+  resetPhys();
+  Object.assign(PHYS, changes);
+  gui?.controllersRecursive().forEach((c) => c.updateDisplay());
+}
+
+/** Back to this player's own saved tuning after an online match. */
+export function useOwnPhysics(): void {
+  resetPhys();
+  loadSaved();
+  gui?.controllersRecursive().forEach((c) => c.updateDisplay());
+}
+
 function copyValues(): void {
   void navigator.clipboard.writeText(JSON.stringify(changedValues(), null, 2));
 }

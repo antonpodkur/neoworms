@@ -1,23 +1,15 @@
 {
   "name": "neoworms",
   "private": true,
-  "version": "0.1.0",
-  "type": "module",
+  "workspaces": [
+    "client",
+    "server"
+  ],
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "preview": "vite preview",
-    "test": "vitest run",
-    "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "lil-gui": "^0.21.0",
-    "phaser": "^4.2.1",
-    "simplex-noise": "^4.0.3"
-  },
-  "devDependencies": {
-    "typescript": "^7.0.2",
-    "vite": "^8.3.4",
-    "vitest": "^5.0.5"
+    "dev": "npm run dev -w client --",
+    "dev:server": "npm run dev -w server --",
+    "build": "npm run build -w client",
+    "test": "npm test -w client",
+    "typecheck": "npm run typecheck --workspaces"
   }
 }

@@ -8,7 +8,7 @@ import {
   type Projectile,
   type ProjectileContext,
 } from './projectiles';
-import { mulberry32 } from './rng';
+import { mulberry32, nextRandom } from './rng';
 import type { Terrain } from './terrain';
 import { useWeapons, type Blast, type WeaponContext } from './weapons';
 import { createWorm, NO_INPUT, stepWorm, type Worm, type WormInput } from './worm';
@@ -26,6 +26,18 @@ export type SimEvent =
   | { type: 'mineTriggered'; id: number }
   | { type: 'dud'; x: number; y: number }
   | { type: 'weaponUsed' };
+
+/** Everything about a World that changes as the game is played (all but the terrain). */
+export interface WorldState {
+  worms: Worm[];
+  projectiles: Projectile[];
+  activeWormId: number;
+  wind: number;
+  tick: number;
+  waterLevel: number;
+  nextProjectileId: number;
+  rngState: number;
+}
 
 export interface TeamSetup {
   name: string;
@@ -45,12 +57,48 @@ export class World implements ProjectileContext, WeaponContext {
   tick = 0;
   private events: SimEvent[] = [];
   private nextProjectileId = 0;
+  private rngState: number;
 
   constructor(
     readonly terrain: Terrain,
     public waterLevel: number,
-    readonly rng: () => number = mulberry32(1),
-  ) {}
+    seed = 1,
+  ) {
+    this.rngState = seed >>> 0;
+  }
+
+  /** Random number in 0..1 from the world's own seeded sequence. */
+  readonly rng = (): number => {
+    const [value, next] = nextRandom(this.rngState);
+    this.rngState = next;
+    return value;
+  };
+
+  /** A deep copy of the changing state; the terrain travels separately as carve events. */
+  snapshot(): WorldState {
+    return structuredClone({
+      worms: this.worms,
+      projectiles: this.projectiles,
+      activeWormId: this.activeWormId,
+      wind: this.wind,
+      tick: this.tick,
+      waterLevel: this.waterLevel,
+      nextProjectileId: this.nextProjectileId,
+      rngState: this.rngState,
+    });
+  }
+
+  /** Takes over a snapshot (not copied, so don't reuse it). */
+  restore(state: WorldState): void {
+    this.worms.splice(0, this.worms.length, ...state.worms);
+    this.projectiles = state.projectiles;
+    this.activeWormId = state.activeWormId;
+    this.wind = state.wind;
+    this.tick = state.tick;
+    this.waterLevel = state.waterLevel;
+    this.nextProjectileId = state.nextProjectileId;
+    this.rngState = state.rngState;
+  }
 
   addWorm(name: string, team: number, x: number, y: number, hp = 100): Worm {
     const worm = createWorm(this.worms.length, name, team, x, y, hp);
@@ -176,7 +224,7 @@ function blastPush(dx: number, dy: number, blast: Blast): { vx: number; vy: numb
 /** Places every team's worms on the map (alternating teams across it) and scatters mines. */
 export function createWorld(map: GeneratedMap, seed: number, teams: TeamSetup[], wormHp = 100): World {
   const { terrain, waterLevel } = map;
-  const world = new World(terrain, waterLevel, mulberry32(seed ^ 0x3a7));
+  const world = new World(terrain, waterLevel, seed ^ 0x3a7);
   const rng = mulberry32(seed ^ 0x5eed);
 
   const roster: { name: string; team: number }[] = [];
