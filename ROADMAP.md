@@ -50,7 +50,8 @@ Each milestone ends with something playable.
   - [ ] The hand-made worm, more animations (backflip, rope swing, weapon draw, hurt, death, drowning, victory), aim poses for every weapon, hats
   - [x] Terrain look ([docs/terrain.md](docs/terrain.md)): sponge and cobblestone materials, rounded lit edges, dark dug-out craters
   - [x] Seaside scenery ([docs/scenery.md](docs/scenery.md)): parallax sky, clouds, hazy islands, posts and far sea; a cave backdrop (layers rendered in Blender, `npm run backdrops`); jade water with reflections and ripples
-  - [ ] More themes, explosions (fire, smoke, debris)
+  - [x] Explosions ([docs/effects.md](docs/effects.md)): flash, fireball, sparks, debris, smoke, and a molten crater rim that keeps burning
+  - [ ] More themes
 
 ## Rope design notes (milestone 2)
 

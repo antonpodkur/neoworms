@@ -17,7 +17,8 @@ import {
 } from '../net/OnlineSession';
 import { BackdropView } from './BackdropView';
 import { DEPTH } from './depth';
-import { explosionFlash, floatingText, splash } from './effects';
+import { floatingText, splash } from './effects';
+import { Explosions } from './explosions';
 import { Hud } from './Hud';
 import { findMap, imageScale, MAPS, type MapEntry } from './maps';
 import { ProjectileView } from './ProjectileView';
@@ -79,6 +80,7 @@ export class GameScene extends Phaser.Scene {
   private joinCode = '';
   private backdrop!: BackdropView;
   private terrainView!: TerrainView;
+  private explosions!: Explosions;
   private water!: WaterView;
   private wormViews = new Map<number, WormView>();
   private ropeView!: RopeView;
@@ -168,6 +170,7 @@ export class GameScene extends Phaser.Scene {
       this.world.waterLevel,
     );
     this.terrainView = new TerrainView(this, terrain, DEPTH.terrain, this.world.waterLevel);
+    this.explosions = new Explosions(this, terrain, this.terrainView);
     createWormAnims(this);
     for (const worm of this.world.worms) this.wormViews.set(worm.id, new WormView(this, worm));
     this.water = new WaterView(this, DEPTH.water, TERRAIN_TEXTURE, terrain.width);
@@ -443,7 +446,7 @@ export class GameScene extends Phaser.Scene {
           this.terrainView.carve(e.x, e.y, e.r);
           break;
         case 'explosion':
-          explosionFlash(this, e.x, e.y, e.r);
+          this.explosions.play(e.x, e.y, e.r, this.world.wind);
           break;
         case 'damage': {
           const worm = this.world.worms[e.wormId];
