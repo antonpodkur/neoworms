@@ -62,8 +62,9 @@ export class Hud {
     this.setHtml(this.turn, 'turn', html);
   }
 
-  /** One bar per team, sized by its worms' total health. */
+  /** One bar per team, sized by its worms' total health; two columns for more than four teams. */
   setTeams(teams: TeamInfo[]): void {
+    this.teams.classList.toggle('wide', teams.length > 4);
     const html = teams
       .map(
         (t, i) => `<div class="team${t.hp === 0 ? ' out' : ''}">

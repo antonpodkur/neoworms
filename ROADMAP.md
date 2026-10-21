@@ -12,6 +12,7 @@ Top priority is the **ninja rope** (rope parkour); first weapons are bazooka, gr
 | Simulation | Pure TS, fixed 60 Hz tick, no Phaser imports | Testable with Vitest, and the same code can run for every player online. |
 | Netcode | **Active player simulates, others watch** | Only one worm acts per turn, so the active player runs physics with zero lag and streams positions + events (`SimEvent`). Full state is sent at turn end. No lockstep determinism needed. |
 | Hosting | **Relay server** with room codes | Works on any network. The server only forwards messages; the host's browser runs the match rules. Check an off-the-shelf room server (e.g. Colyseus) before writing one. |
+| Maps | **Mirrored SVG sources, shipped as PNG** | SVG is editable in any vector editor and diffs as text; a script renders it with resvg and mirrors the left half exactly. PNG decodes the same in every browser, which online play needs (terrain must match). |
 | Feel | **Modelled on Worms Revolution** | Movement measured from WR and converted to worm heights; WR controls (double-tap jump to flip, air steering); WR explosion table for weapons. See [docs/wr-reference.md](docs/wr-reference.md). |
 
 ## Milestones
@@ -41,6 +42,9 @@ Each milestone ends with something playable.
   - [ ] Deploy the relay (needs a Cloudflare login) and host the game (e.g. GitHub Pages)
   - [ ] Later: rejoin after a page reload, spectators, chat
 - [ ] **6 · Maps & content**: themes, import a map from an image, more weapons, crates, barrels
+  - [x] Up to 8 teams (hot-seat and online); our own maps, 4 for 2–4 teams and 3 for 5–8 teams, drawn as mirrored SVGs and built to PNG ([docs/maps.md](docs/maps.md)); worms and mines start in mirrored pairs on symmetric maps
+  - [ ] Playtest the maps and tune them (rope reach, spawn spots, how long the terrain lasts)
+  - [ ] Later: themes (soil/stone textures, backdrops), more maps
 - [ ] **7 · Polish**: sprites, animations, sound, particles, gamepad
 
 ## Rope design notes (milestone 2)

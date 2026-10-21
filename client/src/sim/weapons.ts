@@ -108,13 +108,17 @@ export const SCHEMES: Record<SchemeId, { name: string; ammo: Record<WeaponId, Am
   unlimited: { name: 'Unlimited', ammo: unlimited() },
 };
 
-/** A weapon's state for one team: shots left (null: unlimited) and turns until it's ready. */
+/**
+ * A weapon's state for one team: shots left (null: unlimited), turns until it's ready, and
+ * whether the map rules it out altogether (an air strike under a cave roof).
+ */
 export interface WeaponStatus {
   ammo: number | null;
   wait: number;
+  blocked: boolean;
 }
 
-export const isUsable = (s: WeaponStatus): boolean => s.wait === 0 && s.ammo !== 0;
+export const isUsable = (s: WeaponStatus): boolean => !s.blocked && s.wait === 0 && s.ammo !== 0;
 
 /** Grenade fuse choices in seconds. */
 export const FUSES = [1, 2, 3, 4, 5];

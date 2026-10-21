@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" data-mirror="true" width="2000" height="1000" viewBox="0 0 2000 1000">
+  <!--
+    Grotto · 2–4 teams. A cavern with a stalactite roof, a mound in the middle with a bunker dug
+    into each side, a stalagmite nearly meeting a stalactite, and a pit down to the water on
+    either side.
+    Black is air, brown is soil, grey-blue is stone (water is the bottom 20 px). Only the left
+    half is drawn (#half); it is mirrored onto the right so both sides play the same
+    (data-mirror: the build copies the left half over exactly, pixel for pixel).
+    Run `npm run maps` after editing to rebuild the PNG.
+  -->
+  <defs>
+    <!-- Bends plain shapes into rounded, natural-looking rock. -->
+    <filter id="rock" filterUnits="userSpaceOnUse" x="-200" y="-200" width="2400" height="1400" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.007" numOctaves="2" seed="11" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="50" xChannelSelector="R" yChannelSelector="G"/>
+      <feGaussianBlur stdDeviation="6"/>
+      <feComponentTransfer><feFuncA type="discrete" tableValues="0 1"/></feComponentTransfer>
+    </filter>
+    <clipPath id="left-half"><rect x="-100" y="-100" width="1100" height="1200"/></clipPath>
+
+    <g id="half">
+      <g filter="url(#rock)" fill="#b5794a" stroke-linecap="round">
+        <!-- domed roof and the wall -->
+        <path d="M-100 -100 L1100 -100 L1100 170 L1000 175 L940 150 L870 120 L820 135 L780 100 L700 75
+                 L620 95 L560 115 L520 95 L430 80 L340 100 L260 125 L180 120 L120 170 L90 260 L70 350
+                 L95 430 L75 560 L95 650 L80 800 L60 1100 L-100 1100 Z"/>
+        <!-- stalactites; the middle one nearly meets a stalagmite on the mound -->
+        <path d="M170 110 C230 140 250 240 262 345 C272 240 300 150 360 95 Z"/>
+        <path d="M730 80 C790 130 812 260 822 385 C834 260 850 170 900 130 Z"/>
+        <path d="M880 140 C950 170 985 260 1000 365 C1015 260 1050 170 1120 140 Z"/>
+        <!-- a slab hanging from the roof like a chandelier -->
+        <path d="M520 95 C545 140 548 250 545 315 L575 315 C572 250 575 140 600 95 Z"/>
+        <ellipse cx="560" cy="330" rx="95" ry="24"/>
+        <circle cx="500" cy="352" r="12"/>
+        <circle cx="610" cy="355" r="14"/>
+        <!-- a ledge sticking out of the wall -->
+        <path d="M60 450 L280 465" stroke="#b5794a" stroke-width="42"/>
+        <circle cx="200" cy="485" r="13"/>
+        <!-- side floor, ending in a cliff over the pit -->
+        <path d="M-100 1100 L-100 700 L80 690 L200 700 L300 712 L340 735 L350 800 L345 1100 Z"/>
+        <!-- a boulder over the pit and a smaller rock over the mound -->
+        <ellipse cx="410" cy="560" rx="55" ry="26"/>
+        <ellipse cx="720" cy="470" rx="42" ry="18"/>
+        <!-- the mound, rising to a stalagmite in the middle -->
+        <path d="M470 1100 L478 880 L520 840 L600 785 L700 725 L820 665 L920 625 L1000 610 L1100 610 L1100 1100 Z"/>
+        <path d="M955 620 L1045 620 L1015 510 L1000 475 L985 510 Z"/>
+      </g>
+      <g filter="url(#rock)" fill="#000" stroke="#000" stroke-linecap="round">
+        <!-- a bunker dug into each side of the mound (they don't meet in the middle) -->
+        <path d="M545 835 L870 815" stroke-width="62"/>
+        <!-- an alcove in the wall above the ledge -->
+        <ellipse cx="70" cy="405" rx="55" ry="38" stroke="none"/>
+        <!-- a low cave under the side floor, opening into the pit -->
+        <ellipse cx="230" cy="860" rx="125" ry="45" stroke="none"/>
+      </g>
+    </g>
+  </defs>
+
+  <use href="#half" clip-path="url(#left-half)"/>
+  <use href="#half" clip-path="url(#left-half)" transform="matrix(-1 0 0 1 2000 0)"/>
+</svg>

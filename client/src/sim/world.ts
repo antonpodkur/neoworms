@@ -1,5 +1,5 @@
 import { PHYS } from './constants';
-import { findSpawnPoints, type GeneratedMap } from './mapgen';
+import { findSpawnPoints, isMirrored, type GeneratedMap } from './mapgen';
 import {
   blastProjectile,
   createProjectile,
@@ -305,11 +305,15 @@ function launchDirection(dx: number, dy: number, dist: number, heading?: number)
   return { x: side * Math.cos(min), y: -Math.sin(min) };
 }
 
-/** Places every team's worms on the map (alternating teams across it) and scatters mines. */
+/**
+ * Places every team's worms on the map (alternating teams across it) and scatters mines.
+ * On a symmetric map, worms and mines go in mirrored pairs so no side starts better off.
+ */
 export function createWorld(map: GeneratedMap, seed: number, teams: TeamSetup[], wormHp = 100): World {
   const { terrain, waterLevel } = map;
   const world = new World(terrain, waterLevel, seed ^ 0x3a7);
   const rng = mulberry32(seed ^ 0x5eed);
+  const mirrored = isMirrored(terrain);
 
   const roster: { name: string; team: number }[] = [];
   const longest = Math.max(...teams.map((t) => t.worms.length));
@@ -319,7 +323,7 @@ export function createWorld(map: GeneratedMap, seed: number, teams: TeamSetup[],
     });
   }
 
-  const spots = findSpawnPoints(terrain, waterLevel, roster.length, PHYS.wormRadius, rng);
+  const spots = findSpawnPoints(terrain, waterLevel, roster.length, PHYS.wormRadius, rng, 90, mirrored);
   roster.forEach((entry, i) => {
     const spot = spots[i] ?? { x: terrain.width / 2, y: 0 };
     world.addWorm(entry.name, entry.team, spot.x, spot.y, wormHp);
@@ -328,7 +332,7 @@ export function createWorld(map: GeneratedMap, seed: number, teams: TeamSetup[],
   // Mines go on other floor spots, never right next to a worm.
   const clearOfWorms = (s: { x: number; y: number }) =>
     world.worms.every((w) => Math.hypot(w.x - s.x, w.y - s.y) > PHYS.mineTriggerRadius * 2);
-  findSpawnPoints(terrain, waterLevel, PHYS.mapMines * 3, PHYS.wormRadius, rng, 40)
+  findSpawnPoints(terrain, waterLevel, PHYS.mapMines * 3, PHYS.wormRadius, rng, 40, mirrored)
     .filter(clearOfWorms)
     .slice(0, PHYS.mapMines)
     .forEach((s) => world.spawn({ kind: 'mine', x: s.x, y: s.y, vx: 0, vy: 0, armed: true }));

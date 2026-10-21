@@ -1,12 +1,13 @@
 import { TICK_RATE } from './constants';
 import type { GeneratedMap } from './mapgen';
 import { wormName } from './names';
-import { isUsable, SCHEMES, WEAPON_ORDER, type SchemeId, type WeaponId, type WeaponStatus } from './weapons';
+import { mulberry32 } from './rng';
+import { isUsable, SCHEMES, WEAPON_ORDER, WEAPONS, type SchemeId, type WeaponId, type WeaponStatus } from './weapons';
 import { createWorld, type SimEvent, type World, type WorldState } from './world';
 import { NO_INPUT, type Worm, type WormInput } from './worm';
 
 export interface MatchSettings {
-  /** Team names, 2–4 of them. */
+  /** Team names, 2–8 of them. */
   teams: string[];
   wormsPerTeam: number;
   wormHp: number;
@@ -67,6 +68,13 @@ export interface MatchState {
 /** Shots left per weapon for one team; null is unlimited. */
 type Ammo = Record<WeaponId, number | null>;
 
+export interface MatchOptions {
+  /** The team that takes the first turn (default 0); the rest follow in order. */
+  firstTeam?: number;
+  /** The map has a rock roof, so weapons that come down from the sky can't be used. */
+  enclosed?: boolean;
+}
+
 /** Everything must stay still this long before the next turn starts. */
 const SETTLE_TICKS = Math.round(0.5 * TICK_RATE);
 /** Stop waiting for things to settle after this long, whatever is still moving. */
@@ -100,6 +108,7 @@ export class Match {
   constructor(
     readonly world: World,
     readonly settings: MatchSettings,
+    private readonly options: MatchOptions = {},
   ) {
     this.nextWormIndex = settings.teams.map(() => 0);
     const scheme = SCHEMES[settings.scheme ?? 'standard'].ammo;
@@ -109,12 +118,16 @@ export class Match {
     this.teamTurns = settings.teams.map(() => 0);
   }
 
-  /** What a team has of a weapon: shots left, and how many of its turns until it's ready. */
+  /** What a team has of a weapon: shots left, how many of its turns until it's ready, and whether the map allows it. */
   weaponStatus(team: number, weapon: WeaponId): WeaponStatus {
     const { delay } = SCHEMES[this.settings.scheme ?? 'standard'].ammo[weapon];
     // Turns the team had before its current one (or before its next, if it's not its turn).
     const before = (this.teamTurns[team] ?? 0) - (team === this.turnTeam ? 1 : 0);
-    return { ammo: this.ammo[team]?.[weapon] ?? null, wait: Math.max(0, delay - before) };
+    return {
+      ammo: this.ammo[team]?.[weapon] ?? null,
+      wait: Math.max(0, delay - before),
+      blocked: !!this.options.enclosed && WEAPONS[weapon].use === 'strike',
+    };
   }
 
   /** The worm the player controls right now, if any. */
@@ -124,7 +137,9 @@ export class Match {
 
   /** Begins the first turn. */
   start(): void {
-    if (this.phase === 'waiting') this.nextTurn();
+    if (this.phase !== 'waiting') return;
+    this.turnTeam = (this.options.firstTeam ?? 0) - 1; // nextTurn moves on to the team after this one
+    this.nextTurn();
   }
 
   /** Advances one tick; `input` drives the active worm while it's in control. */
@@ -212,12 +227,12 @@ export class Match {
     if (hurt || (harm && this.teamsStanding().length <= 1)) this.endTurn();
   }
 
-  /** Teams with a worm that still has health (worms at 0 HP blow up when the turn ends). */
   /** Whether the team whose turn it is can use this weapon now. */
   private usable(weapon: WeaponId): boolean {
     return this.turnTeam >= 0 && isUsable(this.weaponStatus(this.turnTeam, weapon));
   }
 
+  /** Teams with a worm that still has health (worms at 0 HP blow up when the turn ends). */
   private teamsStanding(): number[] {
     return this.settings.teams
       .map((_, team) => team)
@@ -311,11 +326,15 @@ export class Match {
   }
 }
 
-/** Builds the world for these settings (worms spread across the map, mines) and its match. */
+/**
+ * Builds the world for these settings (worms spread across the map, mines) and its match.
+ * The seed also picks which team goes first, so every player online agrees on it.
+ */
 export function createMatch(map: GeneratedMap, seed: number, settings: MatchSettings): Match {
   const teams = settings.teams.map((name, t) => ({
     name,
     worms: Array.from({ length: settings.wormsPerTeam }, (_, i) => wormName(t, i)),
   }));
-  return new Match(createWorld(map, seed, teams, settings.wormHp), settings);
+  const firstTeam = Math.floor(mulberry32(seed ^ 0xf125)() * teams.length);
+  return new Match(createWorld(map, seed, teams, settings.wormHp), settings, { firstTeam, enclosed: map.enclosed });
 }

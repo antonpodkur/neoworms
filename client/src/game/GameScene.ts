@@ -1,9 +1,8 @@
 import Phaser from 'phaser';
 import { DT, TICK_RATE } from '../sim/constants';
-import { generateMap, MAP_PRESETS, mapFromImage, type GeneratedMap } from '../sim/mapgen';
+import { generateMap, mapFromImage, type GeneratedMap } from '../sim/mapgen';
 import { createMatch, type Match, type MatchEvent, type MatchSettings } from '../sim/match';
 import { randomSeed } from '../sim/rng';
-import type { Terrain } from '../sim/terrain';
 import { CATEGORIES, WEAPONS, type WeaponId, type WeaponStatus } from '../sim/weapons';
 import type { World } from '../sim/world';
 import { NO_INPUT, type Worm, type WormInput } from '../sim/worm';
@@ -142,7 +141,8 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     if (this.online && !this.session?.isHost) useHostPhysics(this.online.physics);
-    this.match = createMatch(this.buildMap(), this.seed, this.settings);
+    const map = this.buildMap();
+    this.match = createMatch(map, this.seed, this.settings);
     this.world = this.match.world;
     const { terrain } = this.world;
     const query: Record<string, string> = this.session
@@ -154,9 +154,8 @@ export class GameScene extends Phaser.Scene {
       else if (this.session.isHost) this.startOnline(this.settings, mapId);
     });
 
-    const enclosed = isEnclosed(this.map, terrain);
-    const headroom = enclosed ? 0 : SKY_HEADROOM;
-    this.addBackdrop(enclosed ? 'cave' : 'sky', terrain.width, terrain.height, headroom);
+    const headroom = map.enclosed ? 0 : SKY_HEADROOM;
+    this.addBackdrop(map.enclosed ? 'cave' : 'sky', terrain.width, terrain.height, headroom);
     this.terrainView = new TerrainView(this, terrain, DEPTH.terrain);
     for (const worm of this.world.worms) this.wormViews.set(worm.id, new WormView(this, worm));
     this.water = new WaterView(this, DEPTH.water);
@@ -730,12 +729,4 @@ function weaponLabel(worm: Worm, status: WeaponStatus): string {
 
 function imageKey(map: MapEntry): string {
   return `map:${map.id}`;
-}
-
-/** Generated maps say so; image maps count as caves when ground covers most of the top edge. */
-function isEnclosed(map: MapEntry, terrain: Terrain): boolean {
-  if (map.kind === 'generated') return MAP_PRESETS.find((p) => p.id === map.preset)!.enclosed;
-  let solid = 0;
-  for (let x = 0; x < terrain.width; x++) if (terrain.isSolid(x, 0)) solid++;
-  return solid > terrain.width / 2;
 }

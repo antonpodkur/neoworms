@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" data-mirror="true" width="3000" height="1400" viewBox="0 0 3000 1400">
+  <!--
+    Twin Keeps · 5–8 teams. A stone castle on each hill (a keep, a great hall, a gate tower,
+    rooms with windows), a dungeon under the hill, a village in the valley and a bridge with a
+    watchtower on a pier across the moat in the middle.
+    Black is air, brown is soil, grey-blue is stone (water is the bottom 20 px). Only the left
+    half is drawn (#half); it is mirrored onto the right so both sides play the same
+    (data-mirror: the build copies the left half over exactly, pixel for pixel).
+    Run `npm run maps` after editing to rebuild the PNG.
+  -->
+  <defs>
+    <!-- Bends plain shapes into rounded, natural-looking rock. -->
+    <filter id="rock" filterUnits="userSpaceOnUse" x="-200" y="-200" width="3400" height="1800" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.007" numOctaves="2" seed="29" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="50" xChannelSelector="R" yChannelSelector="G"/>
+      <feGaussianBlur stdDeviation="7"/>
+      <feComponentTransfer><feFuncA type="discrete" tableValues="0 1"/></feComponentTransfer>
+    </filter>
+    <clipPath id="left-half"><rect x="-100" y="-100" width="1600" height="1600"/></clipPath>
+
+    <g id="half">
+      <g filter="url(#rock)" fill="#b5794a" stroke="#b5794a" stroke-linecap="round">
+        <!-- the castle hill sloping down to the village and the moat -->
+        <path stroke="none" d="M40 1500 L45 1390 C60 1330 90 1270 120 1200 C150 1120 170 1000 190 940 C200 915 220 905 250 902
+                 L800 902 C840 905 860 930 880 970 C910 1030 960 1060 1020 1070 C1080 1078 1140 1060 1200 1070
+                 C1260 1080 1300 1100 1330 1130 C1345 1160 1345 1250 1340 1380 L1340 1500 Z"/>
+        <!-- rocks floating over the valley -->
+        <ellipse stroke="none" cx="620" cy="300" rx="70" ry="22"/>
+        <ellipse stroke="none" cx="1110" cy="560" rx="60" ry="20"/>
+        <ellipse stroke="none" cx="1500" cy="560" rx="70" ry="22"/>
+      </g>
+      <g filter="url(#rock)" fill="#000" stroke="#000" stroke-linecap="round">
+        <!-- a dungeon under the hill, entered from its outer slope -->
+        <ellipse stroke="none" cx="480" cy="1150" rx="230" ry="60"/>
+        <path d="M110 1225 L300 1170" stroke-width="60"/>
+      </g>
+      <!-- stone buildings: crisp edges, no filter -->
+      <g fill="#7f97ad" shape-rendering="crispEdges">
+        <!-- keep -->
+        <rect x="240" y="380" width="160" height="580"/><rect x="240" y="356" width="24" height="24"/><rect x="286" y="356" width="24" height="24"/><rect x="332" y="356" width="24" height="24"/>
+        <!-- great hall -->
+        <rect x="400" y="700" width="300" height="260"/><rect x="410" y="676" width="24" height="24"/><rect x="456" y="676" width="24" height="24"/><rect x="502" y="676" width="24" height="24"/><rect x="548" y="676" width="24" height="24"/><rect x="594" y="676" width="24" height="24"/><rect x="640" y="676" width="24" height="24"/>
+        <!-- gate tower -->
+        <rect x="700" y="560" width="100" height="400"/><rect x="700" y="536" width="24" height="24"/><rect x="746" y="536" width="24" height="24"/>
+        <!-- a house in the village, its roof, and the bridge with a watchtower over the moat -->
+        <rect x="1060" y="990" width="110" height="110"/>
+        <polygon points="1045,995 1115,940 1185,995"/>
+        <rect x="1300" y="1060" width="300" height="24"/>
+        <rect x="1462" y="1084" width="140" height="400"/>
+        <rect x="1450" y="880" width="150" height="180"/><rect x="1440" y="856" width="24" height="24"/>
+      </g>
+      <g fill="#000" shape-rendering="crispEdges">
+        <!-- keep: four rooms, a hatch in the roof, windows -->
+        <rect x="265" y="405" width="110" height="100"/><rect x="265" y="525" width="110" height="100"/>
+        <rect x="265" y="645" width="110" height="100"/><rect x="265" y="765" width="110" height="115"/>
+        <rect x="300" y="380" width="34" height="25"/>
+        <rect x="375" y="585" width="25" height="40"/><rect x="240" y="705" width="25" height="40"/>
+        <rect x="375" y="830" width="25" height="50"/><rect x="375" y="465" width="25" height="40"/>
+        <!-- great hall: two storeys, open at the gate end -->
+        <rect x="400" y="720" width="280" height="160"/>
+        <!-- gate tower: a room upstairs with a window, the gate below -->
+        <rect x="720" y="580" width="60" height="120"/><rect x="780" y="640" width="20" height="50"/>
+        <rect x="680" y="820" width="140" height="60"/>
+        <!-- house: a room with a door -->
+        <rect x="1075" y="1010" width="80" height="75"/><rect x="1060" y="1040" width="15" height="45"/>
+        <!-- watchtower: one tall room, a door onto the bridge on each side -->
+        <rect x="1472" y="902" width="128" height="158"/>
+        <rect x="1450" y="1012" width="22" height="48"/>
+      </g>
+      <g fill="#7f97ad" shape-rendering="crispEdges">
+        <!-- floors inside the keep stand, the hall's upper floor with a stairwell gap -->
+        <rect x="400" y="795" width="220" height="16"/>
+      </g>
+    </g>
+  </defs>
+
+  <use href="#half" clip-path="url(#left-half)"/>
+  <use href="#half" clip-path="url(#left-half)" transform="matrix(-1 0 0 1 3000 0)"/>
+</svg>

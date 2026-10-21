@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" data-mirror="true" width="2000" height="1000" viewBox="0 0 2000 1000">
+  <!--
+    Twin Isles · 2–4 teams. Two islands across a narrow strait with a keystone rock above it.
+    Black is air, brown is soil, grey-blue is stone (water is the bottom 20 px). Only the left
+    half is drawn (#half); it is mirrored onto the right so both sides play the same
+    (data-mirror: the build copies the left half over exactly, pixel for pixel).
+    Run `npm run maps` after editing to rebuild the PNG.
+  -->
+  <defs>
+    <!-- Bends plain shapes into rounded, natural-looking rock. -->
+    <filter id="rock" filterUnits="userSpaceOnUse" x="-200" y="-200" width="2400" height="1400" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.007" numOctaves="2" seed="4" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="50" xChannelSelector="R" yChannelSelector="G"/>
+      <feGaussianBlur stdDeviation="6"/>
+      <feComponentTransfer><feFuncA type="discrete" tableValues="0 1"/></feComponentTransfer>
+    </filter>
+    <clipPath id="left-half"><rect x="-100" y="-100" width="1100" height="1200"/></clipPath>
+
+    <g id="half">
+      <g filter="url(#rock)" fill="#b5794a">
+        <!-- the island: a hook curling over the plateau, a hill, an arm reaching over the strait -->
+        <path d="M60 1100 L70 900 L90 760 L70 640 L60 520 L70 420 L100 330 L150 270 L220 245 L290 255
+                 L340 290 L345 330 L320 345 L280 320 L220 310 L180 330 L160 380 L155 480 L165 600
+                 L200 618 L300 625 L380 615 L430 580 L470 520 L520 470 L570 450 L620 460 L670 495
+                 L720 530 L800 545 L870 560 L910 580 L905 615 L870 625 L860 700 L880 790 L870 880
+                 L860 1100 Z"/>
+        <!-- drips under the arm -->
+        <circle cx="800" cy="628" r="13"/>
+        <circle cx="840" cy="632" r="11"/>
+        <!-- a ring floating over the hill -->
+        <circle cx="610" cy="230" r="50"/>
+        <!-- the keystone over the strait, with drips, and a sea stack below it -->
+        <ellipse cx="1000" cy="340" rx="120" ry="34"/>
+        <circle cx="935" cy="370" r="12"/>
+        <circle cx="972" cy="378" r="15"/>
+        <path d="M965 1100 L968 900 L950 850 L962 815 L1000 805 L1040 815 L1050 850 L1032 900 L1035 1100 Z"/>
+      </g>
+      <g filter="url(#rock)" fill="#000">
+        <!-- sea cave under the arm, open to the strait -->
+        <ellipse cx="790" cy="690" rx="140" ry="55"/>
+        <!-- a big hollow in the hill, reached by a tunnel from the plateau -->
+        <circle cx="540" cy="610" r="62"/>
+        <path d="M335 598 L490 615" stroke="#000" stroke-width="50" stroke-linecap="round"/>
+        <circle cx="610" cy="230" r="26"/>
+        <!-- a grotto near the waterline, open to the sea, with a shaft down from the plateau -->
+        <ellipse cx="310" cy="830" rx="180" ry="65"/>
+        <path d="M30 850 L200 840" stroke="#000" stroke-width="100" stroke-linecap="round"/>
+        <path d="M250 600 L265 790" stroke="#000" stroke-width="44" stroke-linecap="round"/>
+      </g>
+    </g>
+  </defs>
+
+  <use href="#half" clip-path="url(#left-half)"/>
+  <use href="#half" clip-path="url(#left-half)" transform="matrix(-1 0 0 1 2000 0)"/>
+</svg>

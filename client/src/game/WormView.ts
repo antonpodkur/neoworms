@@ -3,7 +3,8 @@ import { PHYS } from '../sim/constants';
 import type { Worm } from '../sim/worm';
 import { DEPTH } from './depth';
 
-const TEAM_COLORS = [0xff5a5a, 0x5aa9ff, 0x7ddc5a, 0xffd23f];
+/** Red, blue, green, yellow, purple, orange, teal, pink: one per team, up to eight. */
+const TEAM_COLORS = [0xff5a5a, 0x5aa9ff, 0x7ddc5a, 0xffd23f, 0xb98cff, 0xff9a3c, 0x3fe0d0, 0xff7fd1];
 
 export function teamColor(team: number): number {
   return TEAM_COLORS[team % TEAM_COLORS.length];

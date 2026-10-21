@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { PHYS } from './constants';
-import { generateMap } from './mapgen';
+import { generateMap, type GeneratedMap } from './mapgen';
 import { mulberry32 } from './rng';
-import { createMatch, DEFAULT_SETTINGS, Match, type MatchEvent, type MatchSettings } from './match';
+import { createMatch, DEFAULT_SETTINGS, Match, type MatchEvent, type MatchOptions, type MatchSettings } from './match';
 import { Terrain } from './terrain';
-import { roundBlast } from './weapons';
+import { AIRSTRIKE, roundBlast } from './weapons';
 import { NO_INPUT, type WormInput } from './worm';
 import { World } from './world';
 
@@ -15,7 +15,7 @@ const restingY = GROUND - PHYS.wormRadius - 0.5;
  * Flat ground, two teams of `perTeam` worms spread far apart (out of each other's blast
  * range), quick turns and no sudden death unless overridden.
  */
-function setup(perTeam = 2, overrides: Partial<MatchSettings> = {}): Match {
+function setup(perTeam = 2, overrides: Partial<MatchSettings> = {}, options: MatchOptions = {}): Match {
   const terrain = new Terrain(2000, 600);
   for (let y = GROUND; y < 600; y++) for (let x = 0; x < 2000; x++) terrain.mask[y * 2000 + x] = 1;
   const world = new World(terrain, 5000);
@@ -24,7 +24,7 @@ function setup(perTeam = 2, overrides: Partial<MatchSettings> = {}): Match {
     world.addWorm(`B${i + 1}`, 1, 400 + i * 400, restingY);
   }
   const settings = { ...DEFAULT_SETTINGS, turnTime: 1, retreatTime: 1, suddenDeathAfter: 0, ...overrides };
-  return started(new Match(world, settings));
+  return started(new Match(world, settings, options));
 }
 
 /** Lets the worms land, then starts the first turn (and drops its start event). */
@@ -239,6 +239,70 @@ describe('Settling', () => {
   });
 });
 
+describe('Air strike', () => {
+  it("can't be called in under a cave roof", () => {
+    const match = setup(1, { scheme: 'unlimited', turnTime: 30 }, { enclosed: true });
+    const worm = match.activeWorm!;
+    expect(match.weaponStatus(match.turnTeam, 'airstrike')).toEqual({ ammo: null, wait: 0, blocked: true });
+    run(match, 1, { select: 'airstrike' });
+    expect(worm.weapon).not.toBe('airstrike');
+    worm.weapon = 'airstrike'; // even if it's in hand
+    run(match, 1, { target: 1000 });
+    expect(match.world.projectiles).toHaveLength(0);
+    expect(match.phase).toBe('playing');
+  });
+
+  it('comes down from the sky on an open map', () => {
+    const match = setup(1, { scheme: 'unlimited', turnTime: 30 });
+    run(match, 1, { select: 'airstrike' });
+    run(match, 1, { target: 1000 });
+    expect(match.world.projectiles.filter((p) => p.kind === 'missile')).toHaveLength(AIRSTRIKE.missiles);
+  });
+
+  it('is ruled out on maps built as caves', () => {
+    const cave = createMatch(generateMap('cavern', 4), 4, { ...DEFAULT_SETTINGS, scheme: 'unlimited' });
+    cave.start();
+    expect(cave.weaponStatus(cave.turnTeam, 'airstrike').blocked).toBe(true);
+    const island = createMatch(generateMap('one-island', 4), 4, { ...DEFAULT_SETTINGS, scheme: 'unlimited' });
+    island.start();
+    expect(island.weaponStatus(island.turnTeam, 'airstrike').blocked).toBe(false);
+  });
+});
+
+describe('First turn', () => {
+  /** A flat map with room for everyone, quick to build. */
+  function flatMap(): GeneratedMap {
+    const terrain = new Terrain(2000, 600);
+    for (let y = GROUND; y < 600; y++) for (let x = 0; x < 2000; x++) terrain.mask[y * 2000 + x] = 1;
+    return { terrain, waterLevel: 590, enclosed: false };
+  }
+
+  const firstTeam = (seed: number, teams: string[]) => {
+    const match = createMatch(flatMap(), seed, { ...DEFAULT_SETTINGS, teams, wormsPerTeam: 1 });
+    match.start();
+    return match.turnTeam;
+  };
+
+  it('goes to a random team, picked by the seed', () => {
+    const teams = ['Red', 'Blue', 'Green', 'Yellow'];
+    const first = Array.from({ length: 40 }, (_, seed) => firstTeam(seed, teams));
+    expect(new Set(first)).toEqual(new Set([0, 1, 2, 3]));
+    // The same seed always picks the same team, so online players agree.
+    expect(Array.from({ length: 40 }, (_, seed) => firstTeam(seed, teams))).toEqual(first);
+  });
+
+  it('then carries on in team order', () => {
+    const match = createMatch(flatMap(), 3, { ...DEFAULT_SETTINGS, teams: ['A', 'B', 'C'], wormsPerTeam: 1, turnTime: 1, retreatTime: 1 });
+    started(match);
+    const order = [match.turnTeam];
+    for (let i = 0; i < 3; i++) {
+      untilNextTurn(match);
+      order.push(match.turnTeam);
+    }
+    expect(order).toEqual([0, 1, 2, 0].map((t) => (t + order[0]) % 3));
+  });
+});
+
 describe('Saving and restoring (online hand-over)', () => {
   it('a restored match carries on exactly like the original', () => {
     const settings = { ...DEFAULT_SETTINGS, wormsPerTeam: 2 };
@@ -314,7 +378,7 @@ describe('Ammo and delays', () => {
   it('limited weapons are used up', () => {
     const match = setup(1, { turnTime: 30 });
     const team = match.turnTeam;
-    expect(match.weaponStatus(team, 'mine')).toEqual({ ammo: 3, wait: 0 });
+    expect(match.weaponStatus(team, 'mine')).toEqual({ ammo: 3, wait: 0, blocked: false });
     run(match, 1, { select: 'mine' });
     run(match, 1, { fire: true });
     expect(match.world.projectiles).toMatchObject([{ kind: 'mine' }]);
@@ -354,7 +418,7 @@ describe('Ammo and delays', () => {
 
   it('the unlimited set has everything from the first turn', () => {
     const match = setup(1, { scheme: 'unlimited' });
-    expect(match.weaponStatus(0, 'oldWoman')).toEqual({ ammo: null, wait: 0 });
-    expect(match.weaponStatus(1, 'banana')).toEqual({ ammo: null, wait: 0 });
+    expect(match.weaponStatus(0, 'oldWoman')).toEqual({ ammo: null, wait: 0, blocked: false });
+    expect(match.weaponStatus(1, 'banana')).toEqual({ ammo: null, wait: 0, blocked: false });
   });
 });

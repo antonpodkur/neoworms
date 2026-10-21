@@ -155,14 +155,19 @@ export class WeaponPanel {
         button.classList.toggle('selected', c === this.col && r === this.row);
         button.classList.toggle('unavailable', !isUsable(s));
         ammo.textContent = s.ammo === null ? '' : String(s.ammo);
-        wait.textContent = s.wait > 0 ? `(${s.wait})` : '';
+        wait.textContent = s.blocked ? '✕' : s.wait > 0 ? `(${s.wait})` : '';
       }),
     );
     const { id } = this.cells[this.col][this.row];
     const s = this.status(id);
     this.name.textContent = s.ammo === null ? WEAPONS[id].name : `${s.ammo} x ${WEAPONS[id].name}`;
-    this.note.textContent =
-      s.wait > 0 ? `Ready in ${s.wait} turn${s.wait > 1 ? 's' : ''}` : s.ammo === 0 ? 'None left' : CATEGORIES[this.col].key;
+    this.note.textContent = s.blocked
+      ? 'No open sky on this map'
+      : s.wait > 0
+        ? `Ready in ${s.wait} turn${s.wait > 1 ? 's' : ''}`
+        : s.ammo === 0
+          ? 'None left'
+          : CATEGORIES[this.col].key;
   }
 }
 

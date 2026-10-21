@@ -2,13 +2,13 @@ import { MAX_PLAYERS } from '../../../shared/relay';
 import { DEFAULT_SETTINGS, type MatchSettings } from '../sim/match';
 import { SCHEMES, type SchemeId } from '../sim/weapons';
 import type { OnlineSession } from '../net/OnlineSession';
-import type { MapEntry } from './maps';
+import { MAP_GROUPS, type MapEntry } from './maps';
 import { teamColorCss } from './WormView';
 
 const SETTINGS_KEY = 'neoworms.match';
 const NAME_KEY = 'neoworms.name';
-const DEFAULT_TEAM_NAMES = ['Red', 'Blue', 'Green', 'Yellow'];
-const MAX_TEAMS = 4;
+const DEFAULT_TEAM_NAMES = ['Red', 'Blue', 'Green', 'Yellow', 'Purple', 'Orange', 'Teal', 'Pink'];
+const MAX_TEAMS = 8;
 
 /** Match settings from the last game, so friends don't have to re-enter team names. */
 export function loadSettings(): MatchSettings {
@@ -208,7 +208,7 @@ export class SetupScreen {
       ${select('wormHp', 'Worm health', [[50, '50'], [100, '100'], [150, '150'], [200, '200']], s.wormHp)}
       ${select('suddenDeathAfter', 'Sudden death', [[5, 'after 5 min'], [10, 'after 10 min'], [15, 'after 15 min'], [20, 'after 20 min'], [0, 'Never']], s.suddenDeathAfter)}
       ${select('scheme', 'Weapons', Object.entries(SCHEMES).map(([id, scheme]) => [id, scheme.name]), s.scheme)}
-      ${select('map', 'Map', this.maps.map((m) => [m.id, m.name]), this.mapId)}
+      ${mapSelect(this.maps, this.mapId)}
     </div>`;
   }
 
@@ -233,6 +233,7 @@ export class SetupScreen {
   private renderTeams(body: HTMLElement): void {
     const list = body.querySelector('.teams')!;
     const teams = this.settings.teams;
+    list.classList.toggle('many', teams.length > 4);
     list.replaceChildren(
       ...teams.map((name, i) => {
         const row = document.createElement('div');
@@ -261,6 +262,20 @@ function select(name: string, label: string, options: (string | number)[][], cur
     .map(([v, text]) => `<option value="${escape(v)}"${String(v) === String(current) ? ' selected' : ''}>${escape(text)}</option>`)
     .join('');
   return `<label>${label}<select name="${name}">${items}</select></label>`;
+}
+
+/** The map picker, with maps grouped under headings (which team counts they're made for). */
+function mapSelect(maps: MapEntry[], current: string): string {
+  const groups = Object.entries(MAP_GROUPS)
+    .map(([group, label]) => {
+      const options = maps
+        .filter((m) => m.group === group)
+        .map((m) => `<option value="${escape(m.id)}"${m.id === current ? ' selected' : ''}>${escape(m.name)}</option>`)
+        .join('');
+      return options && `<optgroup label="${escape(label)}">${options}</optgroup>`;
+    })
+    .join('');
+  return `<label>Map<select name="map">${groups}</select></label>`;
 }
 
 function escape(value: string | number): string {

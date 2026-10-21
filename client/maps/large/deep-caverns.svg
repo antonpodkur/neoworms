@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" data-mirror="true" width="3000" height="1400" viewBox="0 0 3000 1400">
+  <!--
+    Deep Caverns · 5–8 teams. A chamber on each side with two floors, a great hall in the middle
+    with an underground lake and a rock in it. Thick walls with windows and tunnels between them
+    keep the teams from all shooting at each other at once.
+    Black is air, brown is soil, grey-blue is stone (water is the bottom 20 px). Only the left
+    half is drawn (#half); it is mirrored onto the right so both sides play the same
+    (data-mirror: the build copies the left half over exactly, pixel for pixel).
+    Run `npm run maps` after editing to rebuild the PNG.
+  -->
+  <defs>
+    <!-- Bends plain shapes into rounded, natural-looking rock. -->
+    <filter id="rock" filterUnits="userSpaceOnUse" x="-200" y="-200" width="3400" height="1800" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.007" numOctaves="2" seed="17" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="80" xChannelSelector="R" yChannelSelector="G"/>
+      <feGaussianBlur stdDeviation="8"/>
+      <feComponentTransfer><feFuncA type="discrete" tableValues="0 1"/></feComponentTransfer>
+    </filter>
+    <clipPath id="left-half"><rect x="-100" y="-100" width="1600" height="1600"/></clipPath>
+
+    <g id="half">
+      <!-- solid rock to dig the caverns out of -->
+      <rect x="-100" y="-100" width="1700" height="1600" fill="#b5794a"/>
+      <g filter="url(#rock)" fill="#000" stroke="#000" stroke-linecap="round">
+        <!-- side chamber, with domes in its roof and a pit down to the water -->
+        <ellipse cx="510" cy="600" rx="420" ry="470"/>
+        <circle cx="300" cy="230" r="110"/><circle cx="660" cy="190" r="120"/>
+        <path d="M520 1000 L520 1500" stroke-width="140"/>
+        <!-- the great hall and its lake -->
+        <ellipse cx="1500" cy="700" rx="410" ry="540"/>
+        <circle cx="1240" cy="300" r="130"/><circle cx="1500" cy="170" r="120"/>
+        <path d="M1370 1100 L1370 1500" stroke-width="150"/>
+        <!-- a window high up and a tunnel low down through the wall between them -->
+        <ellipse cx="1005" cy="430" rx="150" ry="55"/>
+        <path d="M880 1010 L1130 995" stroke-width="64"/>
+      </g>
+      <g filter="url(#rock)" fill="#b5794a" stroke="#b5794a" stroke-linecap="round">
+        <!-- stalactites -->
+        <path stroke="none" d="M240 110 C300 160 315 260 322 380 C332 260 350 160 410 100 Z"/>
+        <path stroke="none" d="M600 70 C660 130 685 250 692 350 C702 250 720 130 780 80 Z"/>
+        <path stroke="none" d="M1170 170 C1210 230 1225 340 1232 450 C1242 340 1260 230 1300 160 Z"/>
+        <path stroke="none" d="M1410 120 C1450 220 1480 400 1500 560 C1520 400 1550 220 1590 120 Z"/>
+        <!-- side chamber: an upper floor off the outer wall, a lower floor either side of the pit -->
+        <path stroke="none" d="M40 640 C200 625 330 640 450 630 C530 625 600 640 640 665 C655 690 640 712 610 718
+                 C520 725 420 712 320 722 C220 730 140 722 40 730 Z"/>
+        <circle stroke="none" cx="300" cy="738" r="15"/><circle stroke="none" cx="520" cy="732" r="14"/>
+        <path stroke="none" d="M40 1080 C180 1068 280 1075 380 1070 C420 1070 445 1090 450 1130 L450 1500 L40 1500 Z"/>
+        <path stroke="none" d="M590 1500 L590 1120 C600 1085 640 1070 700 1068 C780 1066 860 1075 960 1072 L960 1500 Z"/>
+        <!-- a boulder over the pit, a ledge on the dividing wall -->
+        <ellipse stroke="none" cx="520" cy="900" rx="60" ry="24"/>
+        <path d="M940 760 L820 775" stroke-width="36"/>
+        <!-- the hall: a floor beside the lake, a rock island in it, a ledge high on the wall -->
+        <path stroke="none" d="M1060 1500 L1060 1010 C1130 990 1200 1000 1250 1010 C1285 1020 1300 1060 1296 1120 L1290 1500 Z"/>
+        <path stroke="none" d="M1445 1500 L1445 1250 C1450 1215 1472 1200 1500 1198 L1600 1198 L1600 1500 Z"/>
+        <path d="M1090 600 L1220 615" stroke-width="40"/>
+        <circle stroke="none" cx="1170" cy="634" r="14"/>
+      </g>
+      <g filter="url(#rock)" fill="#000">
+        <!-- an alcove above the upper floor, a cave under the hall floor open to the lake -->
+        <ellipse cx="120" cy="590" rx="60" ry="40"/>
+        <ellipse cx="1225" cy="1200" rx="100" ry="42"/>
+      </g>
+    </g>
+  </defs>
+
+  <use href="#half" clip-path="url(#left-half)"/>
+  <use href="#half" clip-path="url(#left-half)" transform="matrix(-1 0 0 1 3000 0)"/>
+</svg>

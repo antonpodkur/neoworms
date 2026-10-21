@@ -199,6 +199,14 @@ describe('Image maps', () => {
     expect(terrain.width).toBe(4);
     expect([...terrain.mask]).toEqual([1, 1, 0, 0, 1, 1, 0, 0]);
   });
+
+  it('counts as a cave when ground covers most of the top edge', () => {
+    const W = [255, 255, 255, 255];
+    const B = [0, 0, 0, 255];
+    // 3x2 images: the top row is the roof (or not); the bottom row doesn't matter.
+    expect(mapFromImage([...W, ...W, ...B, ...B, ...B, ...B], 3, 2).enclosed).toBe(true);
+    expect(mapFromImage([...W, ...B, ...B, ...W, ...W, ...W], 3, 2).enclosed).toBe(false);
+  });
 });
 
 describe('Map generation', () => {
@@ -217,6 +225,15 @@ describe('Map generation', () => {
     const spots = findSpawnPoints(world.terrain, 1000, 6, R, mulberry32(3), 40);
     expect(spots.length).toBeGreaterThan(0);
     for (const s of spots) expect(s.y).toBeLessThan(GROUND);
+  });
+
+  it('squeezes worms closer together when there is no room to spread them out', () => {
+    const world = flatWorld(); // 800 px of ground: room for 9 worms at the usual spacing
+    const spots = findSpawnPoints(world.terrain, 1000, 16, R, mulberry32(2));
+    expect(spots).toHaveLength(16);
+    for (const a of spots) {
+      for (const b of spots) if (a !== b) expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThanOrEqual(2 * R);
+    }
   });
 
   it.each(MAP_PRESETS.map((p) => p.id))('%s has room for 8 worms on dry land', (preset) => {

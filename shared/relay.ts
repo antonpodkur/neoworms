@@ -7,7 +7,7 @@
  */
 
 export const RELAY_PARTY = 'room';
-export const MAX_PLAYERS = 4;
+export const MAX_PLAYERS = 8;
 
 export interface Peer {
   id: string;
