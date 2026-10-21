@@ -122,6 +122,27 @@ calibration footage thrown worms slid 0.5–2 wh on flat ground, which ours matc
 Not used: `SlideMaxSlideableSlope 40` and `SlideMaxSlopeForSlowDown 80` (our slide follows the
 ground like walking, so it stops at steps it can't climb).
 
+## Ninja rope
+
+Measured from six rope clips on the calibration map (free fall after letting go fits 325 px/s²,
+so the scale holds to ~5%):
+
+| | Worms Revolution | Ours |
+|---|---|---|
+| Hook speed | ~1200 px/s | `ropeShotSpeed` 1200 (was 2400) |
+| Climbing up | ~115 px/s | `ropeReelInSpeed` 115 |
+| Letting out | ~150 px/s | `ropeReelOutSpeed` 150 (both were 160) |
+| Swing | periods of 3.6 s at 229 px and 2.8 s at 139 px: a pendulum under ~700 px/s², 2.2× world gravity | `ropeGravity` 700 on a taut rope; slack and free flight use 320 |
+| Swing push (← →) | ~200 px/s² (rough) | 170 |
+| Letting go | keeps its velocity, normal gravity after | same |
+| Longest rope | at least ~295 px (no miss recorded) | 380 |
+| Ropes per turn | a match setting in WR | not limited yet |
+
+Not seen yet: the rope wrapping around corners, going slack, bouncing off walls, a deliberate
+miss (for the max length), a swing with no ← → (to confirm the swing gravity without the
+player's push), and whether the hop when roping from the ground starts at the shot or on
+attaching (ours: on attaching).
+
 ## Worm classes
 
 | | Soldier | Heavy | Scientist | Scout |

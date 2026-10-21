@@ -105,7 +105,8 @@ function bentLength(rope: AttachedRope): number {
 function reelRope(worm: Worm, rope: AttachedRope, dir: number, terrain: Terrain): void {
   const pivot = last(rope.pivots);
   const dist = distance(worm, pivot);
-  let target = Math.max(PHYS.ropeMinLength, rope.length + dir * PHYS.ropeReelSpeed * DT);
+  const reelSpeed = dir < 0 ? PHYS.ropeReelInSpeed : PHYS.ropeReelOutSpeed;
+  let target = Math.max(PHYS.ropeMinLength, rope.length + dir * reelSpeed * DT);
   if (dir > 0) target = Math.min(target, Math.max(rope.length, PHYS.ropeMaxLength - bentLength(rope)));
   if (target === rope.length || dist < 0.001) return;
 
@@ -143,7 +144,7 @@ function isTaut(worm: Worm, rope: AttachedRope): boolean {
   if (!PHYS.ropeCanGoSlack) return true;
   if ((worm.vx * dx + worm.vy * dy) / dist < -1) return false; // moving inward
   const swingSpeed = (worm.vx * dy - worm.vy * dx) / dist;
-  const outwardGravity = (PHYS.gravity * dy) / dist;
+  const outwardGravity = (PHYS.ropeGravity * dy) / dist;
   return (swingSpeed * swingSpeed) / dist + outwardGravity >= 0;
 }
 
@@ -157,7 +158,7 @@ function swingTaut(worm: Worm, rope: AttachedRope, swing: number, terrain: Terra
   let pivot = last(rope.pivots);
   let angle = angleFrom(pivot, worm);
   let speed = worm.vx * Math.cos(angle) - worm.vy * Math.sin(angle);
-  speed += (swing * PHYS.ropeSwingAccel * Math.cos(angle) - PHYS.gravity * Math.sin(angle)) * DT;
+  speed += (swing * PHYS.ropeSwingAccel * Math.cos(angle) - PHYS.ropeGravity * Math.sin(angle)) * DT;
   speed = Math.max(-PHYS.ropeMaxSpeed, Math.min(PHYS.ropeMaxSpeed, speed));
 
   for (let remaining = Math.abs(speed) * DT; remaining > 0; remaining -= 1) {

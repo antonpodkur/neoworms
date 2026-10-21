@@ -25,7 +25,7 @@ function hangingWorm(world: World, length: number, degrees: number): Worm {
 
 const rope = (worm: Worm) => worm.rope as AttachedRope;
 /** Ticks for a pendulum of this length to swing across and back up (with a margin for wide swings). */
-const halfSwingTicks = (length: number) => Math.ceil(Math.PI * Math.sqrt(length / PHYS.gravity) * 1.15 * 60);
+const halfSwingTicks = (length: number) => Math.ceil(Math.PI * Math.sqrt(length / PHYS.ropeGravity) * 1.15 * 60);
 const angleOf = (worm: Worm) => (Math.atan2(worm.x - ANCHOR.x, worm.y - ANCHOR.y) * 180) / Math.PI;
 
 function run(world: World, ticks: number, input: Partial<WormInput> = {}): void {
@@ -56,8 +56,9 @@ describe('Ninja rope', () => {
     expect(worm.grounded).toBe(true);
     worm.aim = Math.PI / 2;
     run(world, 1, { fire: true });
-    run(world, 12);
+    for (let t = 0; t < 60 && worm.rope?.phase !== 'attached'; t++) run(world, 1); // hook flying up
     expect(worm.rope?.phase).toBe('attached');
+    run(world, 8);
     expect(worm.y).toBeLessThan(400 - PHYS.wormRadius - 10);
   });
 
@@ -94,7 +95,7 @@ describe('Ninja rope', () => {
     const world = openWorld();
     const worm = hangingWorm(world, 150, 0);
     run(world, 30, { up: true });
-    expect(rope(worm).length).toBeCloseTo(150 - PHYS.ropeReelSpeed * 0.5, 0);
+    expect(rope(worm).length).toBeCloseTo(150 - PHYS.ropeReelInSpeed * 0.5, 0);
     expect(worm.y).toBeCloseTo(ANCHOR.y + rope(worm).length, 0);
     run(world, 300, { up: true });
     expect(rope(worm).length).toBe(PHYS.ropeMinLength);
@@ -133,7 +134,7 @@ describe('Ninja rope', () => {
     const worm = hangingWorm(world, 150, -60);
     while (angleOf(worm) < 0) run(world, 1); // swing down to the bottom, where it's fastest
     const speed = worm.vx;
-    expect(speed).toBeGreaterThan(0.9 * Math.sqrt(2 * PHYS.gravity * 75)); // fell 75px
+    expect(speed).toBeGreaterThan(0.9 * Math.sqrt(2 * PHYS.ropeGravity * 75)); // fell 75px
     run(world, 1, { fire: true });
     expect(worm.rope).toBeNull();
     expect(worm.vx).toBeGreaterThan(speed * 0.8);

@@ -22,7 +22,9 @@ export function createTuningPanel(): void {
 
   const rope = gui.addFolder('Ninja rope');
   rope.add(PHYS, 'ropeSwingAccel', 0, 1500, 10).name('swing push');
-  rope.add(PHYS, 'ropeReelSpeed', 20, 600, 10).name('climb speed');
+  rope.add(PHYS, 'ropeReelInSpeed', 20, 600, 5).name('climb up speed');
+  rope.add(PHYS, 'ropeReelOutSpeed', 20, 600, 5).name('let out speed');
+  rope.add(PHYS, 'ropeGravity', 100, 1500, 10).name('swing gravity');
   rope.add(PHYS, 'ropeReelMomentum', 0, 1, 0.05).name('climb speeds up swing');
   rope.add(PHYS, 'ropeMaxLength', 100, 900, 10).name('max length');
   rope.add(PHYS, 'ropeShotSpeed', 300, 5000, 50).name('shot speed');

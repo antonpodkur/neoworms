@@ -100,17 +100,25 @@ const defaults = {
   blastMinAngle: 65,
 
   /*
-   * Ninja rope. Not calibrated yet: these values were tuned by feel against the old, ~20%
-   * faster movement, and the WR rope clip recorded so far didn't hold still enough to measure
-   * (it only showed 3 rope shots per turn). Rope length, swing, climb speed and letting go
-   * still need footage on the calibration map; until then expect the rope to feel a bit off
-   * next to the slower gravity.
+   * Ninja rope. Hook speed, climbing and the swing are measured from WR footage on the
+   * calibration map (docs/wr-reference.md); the length, swing push, top speed and bounce are
+   * still by feel. How many ropes a turn allows is a match setting in WR, not done yet.
    */
   /** Total rope length, including the parts bent around corners. */
   ropeMaxLength: 380,
   ropeMinLength: 16,
-  ropeShotSpeed: 2400,
-  ropeReelSpeed: 160,
+  /** The hook flies out at this speed (~1200 px/s measured). */
+  ropeShotSpeed: 1200,
+  /** Climbing up the rope (~115 px/s measured)... */
+  ropeReelInSpeed: 115,
+  /** ...and letting it out, a little faster (~150 px/s measured). */
+  ropeReelOutSpeed: 150,
+  /**
+   * Gravity on a worm hanging from a taut rope. WR swings much faster than a plain pendulum:
+   * periods of 3.6 s at 229 px and 2.8 s at 139 px both fit ~700, about 2.2× world gravity.
+   * Falling on a slack rope and flying after letting go use normal gravity.
+   */
+  ropeGravity: 700,
   /** Sideways push while swinging (← →). */
   ropeSwingAccel: 170,
   ropeMaxSpeed: 800,
