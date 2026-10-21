@@ -52,9 +52,15 @@ built sheet is committed, so playing or working on the game doesn't need Blender
   back to rest, so an action only keys what it changes.
 - The sliders' drivers use simple expressions only (`v`, `max(v, 0)`), which Blender evaluates
   without Python, so they work in the headless render with auto-run scripts off.
-- `weapon` (e.g. `bazooka`) shows the object `weapon.bazooka` and hides the other `weapon.*`.
+- `weapon` (e.g. `bazooka`) shows the object `weapon.bazooka`, and any parts named
+  `weapon.bazooka.*`, and hides the other weapons. Weapons ride on the `aim` bone, in front of the
+  body; parts that flicker (the dynamite's spark, the mine's light) ride on its child `fx`, which
+  the hold animations scale.
 - `aim_<weapon id>` is an aiming pose: one frame per aim angle, from straight down to straight
   up. The game shows it for the worm whose turn it is while that weapon is selected.
+- `hold_<weapon id>` loops instead, for weapons that aren't aimed (dynamite, mine, air strike).
+- `draw_<weapon id>` plays first, when the turn starts or the worm switches to that weapon: the
+  weapon pops in and the worm settles into the level aim (or hold) pose.
 - `rope` is a pose too: one frame per swing speed across the rope, from swinging backward fast
   (the body trails ahead) through hanging still (the middle frame) to swinging forward fast. The
   game turns the sprite so its top points at the rope, which comes in at the top of the head.
@@ -70,7 +76,11 @@ built sheet is committed, so playing or working on the game doesn't need Blender
 | `hurt` | thrown by a blast, and flinching for a moment after losing health |
 | `dying` | standing at 0 HP, waiting to blow up at the end of the turn |
 | `drown` | sinking after drowning, while it fades |
-| `aim_bazooka` | aiming the bazooka |
+| `aim_<weapon>` | aiming: bazooka, grenade, cluster, banana, bat, rope |
+| `hold_<weapon>` | holding the dynamite, a mine, or the air strike radio |
+| `draw_<weapon>` | taking out any of those weapons |
+
+The prod and the old woman have no weapon to hold yet, so the worm idles while they're selected.
 
 Thrown worms tumble (the game spins the sprite) and worms on the rope turn toward the rope.
 

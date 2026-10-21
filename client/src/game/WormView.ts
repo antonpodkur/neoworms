@@ -79,6 +79,8 @@ export class WormView {
   private hurtAt = -Infinity;
   /** Took off with a backflip and hasn't landed yet: the flip plays through the flight. */
   private flipping = false;
+  /** The weapon out in this turn, so switching weapons (or a new turn) plays its draw first. */
+  private drawn: string | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -122,7 +124,9 @@ export class WormView {
     if (worm.grounded && (worm.x !== worm.prevX || worm.walkProgress > 0)) this.movedAt = now;
     if (worm.pendingJump) this.flipping = worm.pendingJump.kind === 'backflip';
     else if (worm.grounded || worm.rope || worm.knocked) this.flipping = false;
+    if (!aiming) this.drawn = null;
     const aimAnim = this.scene.anims.get(`aim_${worm.weapon}`);
+    const hold = `hold_${worm.weapon}`;
     let rotation = 0;
     if (worm.rope?.phase === 'attached') {
       // Hang with the head toward the rope's last pivot, the body trailing the swing.
@@ -144,9 +148,18 @@ export class WormView {
     else if (now - this.hurtAt < HURT_MS) this.play('hurt');
     else if (worm.slide !== 0) this.play('jump');
     else if (now - this.movedAt < WALK_HOLD_MS) this.play('walk');
-    else if (aiming && aimAnim) {
-      // One frame per aim angle: the first aims straight down, the last straight up.
-      this.pose(aimAnim, (worm.aim + Math.PI / 2) / Math.PI);
+    else if (aiming && (aimAnim || this.scene.anims.exists(hold))) {
+      const draw = `draw_${worm.weapon}`;
+      if (this.drawn !== worm.weapon) {
+        this.drawn = worm.weapon;
+        if (this.scene.anims.exists(draw)) this.play(draw);
+      }
+      if (this.anim === draw && this.body.anims.isPlaying) {
+        // Let the draw finish.
+      } else if (aimAnim) {
+        // One frame per aim angle: the first aims straight down, the last straight up.
+        this.pose(aimAnim, (worm.aim + Math.PI / 2) / Math.PI);
+      } else this.play(hold); // weapons that aren't aimed (dynamite, mine, air strike)
     } else if (worm.hp <= 0) this.play('dying'); // waits to blow up at the end of the turn
     else this.play('idle');
     this.body.setRotation(rotation);

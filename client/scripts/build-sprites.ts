@@ -39,11 +39,16 @@ try {
   );
   const packed = await pack.packAsync(images, {
     textureName: 'worm',
+    // One sheet, at most 4096 px a side (what every WebGL device handles); the packer would
+    // split into several files past that, which the game doesn't load.
+    width: 4096,
+    height: 4096,
     removeFileExtension: true,
     allowRotation: false,
     padding: 2,
     extrude: 1,
   });
+  if (packed.length !== 2) throw new Error(`The frames don't fit one 4096 px sheet (${packed.length / 2} sheets)`);
   for (const file of packed) {
     if (file.name.endsWith('.json')) {
       const atlas = JSON.parse(file.buffer.toString('utf8'));

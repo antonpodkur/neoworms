@@ -49,7 +49,8 @@ Each milestone ends with something playable.
   - [x] Worm sprites rendered from Blender (`npm run sprites`, [docs/art.md](docs/art.md)): idle, walk, jump, fly and bazooka aiming
   - [x] The hand-made worm: a soft pear-shaped body, big touching eyes with floating brows, expressions as shape keys driven from the rig
   - [x] Rope swing (the body trails the swing), backflip, hurt, dying at 0 HP and drowning animations
-  - [ ] More animations (weapon draw, victory), aim poses for every weapon, hats
+  - [x] Weapon models; aim poses (bazooka, grenade, cluster, banana, bat, rope), hold loops (dynamite, mine, air strike radio) and a draw for each
+  - [ ] Victory animation, prod and old woman poses, hats
   - [x] Terrain look ([docs/terrain.md](docs/terrain.md)): sponge and cobblestone materials, rounded lit edges, dark dug-out craters
   - [x] Seaside scenery ([docs/scenery.md](docs/scenery.md)): parallax sky, clouds, hazy islands, posts and far sea; a cave backdrop (layers rendered in Blender, `npm run backdrops`); jade water with reflections and ripples
   - [x] Explosions ([docs/effects.md](docs/effects.md)): flash, fireball, sparks, debris, smoke, and a molten crater rim that keeps burning

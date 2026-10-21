@@ -30,7 +30,7 @@ def main():
             rig.animation_data.action_slot = action.slots[0]
         weapon = action.get("weapon")
         for obj in weapons:
-            obj.hide_render = obj.name != f"weapon.{weapon}"
+            obj.hide_render = obj.name.split(".")[1] != weapon  # weapon.<id> and its parts weapon.<id>.*
         start, end = (round(f) for f in action.frame_range)
         # In a cycle the last frame repeats the first.
         frames = range(start, end if action.use_cyclic else end + 1)
