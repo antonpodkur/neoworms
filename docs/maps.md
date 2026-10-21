@@ -12,7 +12,8 @@ match. Browsers can render the same SVG a few edge pixels apart.
 ## Format
 
 - Black is air, brown (`#b5794a`) is soil, grey-blue (`#7f97ad`) is stone. Stone only looks
-  different (no grass, grey texture); both are destructible.
+  different (cobblestone instead of sandy sponge, see [terrain.md](terrain.md)); both are
+  destructible.
 - One PNG pixel is one game pixel. The bottom 20 px are under water.
 - Sizes: 2000 × 1000 for 2–4 teams, 3000 × 1400 for 5–8 teams.
 - A map whose top edge is mostly ground counts as a cave: it gets the cave backdrop and no air
