@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "maps": "node --no-warnings scripts/build-maps.ts"
   },
   "dependencies": {
     "lil-gui": "^0.21.0",
@@ -17,6 +18,9 @@
     "simplex-noise": "^4.0.3"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "@types/pngjs": "^6.0.5",
+    "pngjs": "^7.0.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
     "vitest": "^5.0.5"

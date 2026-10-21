@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" data-mirror="true" width="3000" height="1400" viewBox="0 0 3000 1400">
+  <!--
+    Seven Isles · 5–8 teams. A hook island, a mesa and a low islet on each side of a volcano,
+    with rocks floating overhead to swing between them.
+    Black is air, brown is soil, grey-blue is stone (water is the bottom 20 px). Only the left
+    half is drawn (#half); it is mirrored onto the right so both sides play the same
+    (data-mirror: the build copies the left half over exactly, pixel for pixel).
+    Run `npm run maps` after editing to rebuild the PNG.
+  -->
+  <defs>
+    <!-- Bends plain shapes into rounded, natural-looking rock. -->
+    <filter id="rock" filterUnits="userSpaceOnUse" x="-200" y="-200" width="3400" height="1800" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.007" numOctaves="2" seed="5" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="50" xChannelSelector="R" yChannelSelector="G"/>
+      <feGaussianBlur stdDeviation="7"/>
+      <feComponentTransfer><feFuncA type="discrete" tableValues="0 1"/></feComponentTransfer>
+    </filter>
+    <clipPath id="left-half"><rect x="-100" y="-100" width="1600" height="1600"/></clipPath>
+
+    <g id="half">
+      <g filter="url(#rock)" fill="#b5794a" stroke="#b5794a" stroke-linecap="round">
+        <!-- outer island: a beach, two tiers, a hook arching over the lower one -->
+        <path stroke="none" d="M40 1500 L45 1390 C60 1340 110 1300 170 1270 C200 1255 220 1235 270 1232 C300 1230 315 1200 322 1150
+                 C328 1100 345 1062 380 1050 C410 1040 440 1050 455 1075 C470 1110 468 1160 455 1200 C445 1240 460 1290 480 1340
+                 C490 1370 495 1400 495 1500 Z"/>
+        <path d="M335 1080 C320 990 265 935 175 925" fill="none" stroke-width="40"/>
+        <circle stroke="none" cx="185" cy="950" r="15"/>
+        <!-- mesa: a high flat top with overhanging lips, a cave on its outer side -->
+        <path stroke="none" d="M560 1500 L565 1390 C575 1330 600 1290 610 1230 C618 1170 600 1100 595 1030 C590 960 575 900 560 850
+                 C548 810 545 770 565 748 C600 728 660 735 720 728 C780 722 850 732 905 742 C935 750 935 775 915 795
+                 C895 820 890 870 895 930 C900 1000 915 1080 935 1160 C950 1230 975 1300 985 1380 L990 1500 Z"/>
+        <path d="M915 1085 L985 1075" stroke-width="34"/>
+        <circle stroke="none" cx="568" cy="790" r="14"/><circle stroke="none" cx="920" cy="800" r="15"/>
+        <!-- a low islet in the bay, a stepping stone to the volcano -->
+        <path stroke="none" d="M1050 1500 L1052 1390 C1060 1300 1080 1220 1110 1170 C1130 1140 1160 1135 1185 1150 C1210 1170 1225 1230 1232 1300
+                 C1236 1350 1240 1390 1240 1500 Z"/>
+        <circle stroke="none" cx="1150" cy="1185" r="16"/>
+        <!-- the volcano in the middle, a crater on top -->
+        <path stroke="none" d="M1290 1500 L1292 1390 C1300 1320 1320 1260 1335 1200 C1350 1130 1365 1060 1385 990 C1405 920 1420 840 1435 770
+                 C1445 735 1465 728 1478 750 C1488 768 1500 772 1500 772 L1600 772 L1600 1500 Z"/>
+        <path d="M1340 1192 L1285 1186" stroke-width="30"/>
+        <!-- floating rocks and a ring high over the volcano -->
+        <ellipse stroke="none" cx="300" cy="760" rx="80" ry="24"/>
+        <ellipse stroke="none" cx="450" cy="430" rx="40" ry="16"/>
+        <ellipse stroke="none" cx="720" cy="520" rx="60" ry="20"/>
+        <ellipse stroke="none" cx="1060" cy="700" rx="70" ry="22"/>
+        <ellipse stroke="none" cx="1250" cy="520" rx="55" ry="18"/>
+        <circle stroke="none" cx="1500" cy="420" r="56"/>
+      </g>
+      <g filter="url(#rock)" fill="#000" stroke="#000" stroke-linecap="round">
+        <ellipse stroke="none" cx="440" cy="1255" rx="55" ry="35"/>
+        <ellipse stroke="none" cx="690" cy="940" rx="85" ry="42"/>
+        <path d="M600 960 L680 945" stroke-width="60"/>
+        <!-- a bunker on each side of the volcano (they don't meet) -->
+        <path d="M1330 1150 L1420 1140" stroke-width="60"/>
+        <circle stroke="none" cx="1500" cy="420" r="30"/>
+      </g>
+    </g>
+  </defs>
+
+  <use href="#half" clip-path="url(#left-half)"/>
+  <use href="#half" clip-path="url(#left-half)" transform="matrix(-1 0 0 1 3000 0)"/>
+</svg>

@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" data-mirror="true" width="2000" height="1000" viewBox="0 0 2000 1000">
+  <!--
+    Spires · 2–4 teams. Rock spires rising out of the sea, mushroom caps on top, a sagging
+    natural bridge low down. Every gap is a long way to fall: bring the rope.
+    Black is air, brown is soil, grey-blue is stone (water is the bottom 20 px). Only the left
+    half is drawn (#half); it is mirrored onto the right so both sides play the same
+    (data-mirror: the build copies the left half over exactly, pixel for pixel).
+    Run `npm run maps` after editing to rebuild the PNG.
+  -->
+  <defs>
+    <!-- Bends plain shapes into rounded, natural-looking rock. -->
+    <filter id="rock" filterUnits="userSpaceOnUse" x="-200" y="-200" width="2400" height="1400" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.007" numOctaves="2" seed="23" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="50" xChannelSelector="R" yChannelSelector="G"/>
+      <feGaussianBlur stdDeviation="6"/>
+      <feComponentTransfer><feFuncA type="discrete" tableValues="0 1"/></feComponentTransfer>
+    </filter>
+    <clipPath id="left-half"><rect x="-100" y="-100" width="1100" height="1200"/></clipPath>
+
+    <g id="half">
+      <g filter="url(#rock)" fill="#b5794a" stroke="#b5794a" stroke-linecap="round">
+        <!-- outer spire, its cap leaning in -->
+        <path stroke="none" d="M80 1100 C95 950 110 800 120 650 C125 560 115 500 95 455 C80 440 85 425 110 422
+                 C160 415 220 418 262 432 C272 445 260 458 240 460 C215 462 200 470 190 500 C180 560 200 700 230 850
+                 C240 950 250 1030 255 1100 Z"/>
+        <path d="M205 705 L300 692" stroke-width="30"/>
+        <!-- middle spire with a wide mushroom cap and a ledge -->
+        <path stroke="none" d="M410 1100 C430 950 455 800 470 650 C478 560 470 450 462 345 C440 338 400 330 375 315
+                 C362 300 380 285 420 276 C480 262 560 262 620 278 C645 288 640 308 615 318 C585 328 555 335 548 360
+                 C545 450 560 560 575 650 C590 800 600 950 610 1100 Z"/>
+        <path d="M560 625 L660 642" stroke-width="34"/>
+        <!-- the tall spire in the middle -->
+        <path stroke="none" d="M900 1100 C920 950 945 800 955 650 C962 520 948 380 950 262 C920 250 885 232 872 215
+                 C880 198 930 186 1000 180 L1100 180 L1100 1100 Z"/>
+        <path d="M948 520 L860 540" stroke-width="30"/>
+        <!-- a thin natural bridge sagging between the spires -->
+        <path d="M560 700 Q760 800 950 690" fill="none" stroke-width="30"/>
+        <!-- floating rocks to swing from, islets to land on -->
+        <ellipse stroke="none" cx="300" cy="200" rx="60" ry="22"/>
+        <ellipse stroke="none" cx="720" cy="140" rx="55" ry="20"/>
+        <ellipse stroke="none" cx="320" cy="965" rx="70" ry="62"/>
+        <ellipse stroke="none" cx="760" cy="955" rx="60" ry="52"/>
+      </g>
+      <g filter="url(#rock)" fill="#000">
+        <!-- an eye through the middle spire -->
+        <circle cx="1000" cy="300" r="30"/>
+      </g>
+    </g>
+  </defs>
+
+  <use href="#half" clip-path="url(#left-half)"/>
+  <use href="#half" clip-path="url(#left-half)" transform="matrix(-1 0 0 1 2000 0)"/>
+</svg>

@@ -1,6 +1,6 @@
 # NeoWorms
 
-A Worms-style artillery game for the browser: 2–4 teams take turns, on one computer or online
+A Worms-style artillery game for the browser: 2–8 teams take turns, on one computer or online
 (milestone 5). See [ROADMAP.md](ROADMAP.md) for where it's headed.
 
 ## Run it
@@ -15,7 +15,7 @@ Then open the URL Vite prints (usually http://localhost:5173). The menu has two 
 - **This computer**: hot-seat. Pick teams, worms per team, turn time, worm health, when sudden
   death starts, and the map.
 - **Online**: host a game (you get a 4-letter room code and an invite link) or join one with a
-  code. Each player is one team; the host picks the settings and starts the match.
+  code. Each player is one team (up to 8); the host picks the settings and starts the match.
 
 Online play needs the relay. To try it on one machine (e.g. two browser tabs), run it too:
 
@@ -39,11 +39,12 @@ The deploy prints the relay's address, e.g. `neoworms-relay.<you>.workers.dev`. 
 For now, online play has some limits:
 
 - **Everyone runs the game themselves** with `npm run dev`. The game isn't hosted anywhere yet,
-  and a hosted build would only have the generated maps (Worms Revolution maps stay local).
+  and a hosted build has our own maps and the generated ones (Worms Revolution maps stay local).
 - **Reloading the page drops you out of an online match.** Rejoining a match in progress isn't
   supported yet; the others carry on and your turns are skipped.
 
-Other scripts: `npm test` (simulation tests), `npm run typecheck`, `npm run build`.
+Other scripts: `npm test` (simulation tests), `npm run typecheck`, `npm run build`,
+`npm run maps` (rebuild the map PNGs after editing their SVGs).
 
 ## Controls
 
@@ -74,7 +75,8 @@ same map and you can share a link to a map you like.
 
 ## Match rules
 
-- Teams take turns; each team cycles through its worms. A turn lasts the turn time.
+- A random team goes first, then teams take turns; each team cycles through its worms. A turn
+  lasts the turn time.
 - Using a weapon (not the ninja rope) leaves 3 seconds of retreat time to get away; you can still
   move and swing on the rope, but not fire again.
 - Getting hurt during your own turn ends it.
@@ -84,6 +86,8 @@ same map and you can share a link to a map you like.
   dynamite 2 from turn 2, mines 3, old woman 1 from turn 4, air strike 1 from turn 3, bat 1).
   **Unlimited** has everything from the start. The panel shows what's left (∞ for unlimited)
   and how many turns until a weapon is ready.
+- No air strikes on cave maps (Grotto, Deep Caverns, Cavern, Rope Gym): there's no sky to call
+  them in from.
 - The next turn starts once everything has stopped moving: grenades gone off, worms landed.
 - Wind changes every turn and pushes bazooka shells.
 - Sudden death: after the set time the water rises at the end of every turn.
@@ -91,8 +95,22 @@ same map and you can share a link to a map you like.
 
 ## Maps
 
-Besides the generated maps, any PNG in `maps/` becomes a map: dark pixels are air, anything else
-is ground (green-tinted ground is drawn as stone).
+The menu groups the maps by how many teams they're made for:
+
+| For 2–4 teams (2000 × 1000) | For 5–8 teams (3000 × 1400) |
+|---|---|
+| **Grotto**: a cave with a stalactite roof, bunkers in a central mound, pits to the water | **Deep Caverns**: two side chambers and a great hall with a lake, joined by a window and a tunnel |
+| **Spires**: rock spires in the sea, mushroom caps, a sagging natural bridge | **Seven Isles**: a hook island, a mesa and an islet each side of a volcano |
+| **Strata**: three shelves on columns, gaps to drop grenades through | **Twin Keeps**: two stone castles, a village, a watchtower bridge over the moat |
+| **Twin Isles**: two islands across a strait, a keystone rock over it | |
+
+Every one of them is the same on both sides, and worms start in mirrored pairs: with an even
+number of teams, each worm has an enemy worm starting in the same spot on the other side. Mines
+are placed the same way. See [docs/maps.md](docs/maps.md) for how they're made and how to add
+your own.
+
+Besides these and the generated maps, any PNG in `client/maps/` becomes a map: dark pixels are
+air, anything else is ground (green- or blue-tinted ground is drawn as stone).
 
 Worms Revolution level outlines can be used locally: copy the `08_maps/*.png` files from your
 own export into `client/maps/wr/`. That folder is git-ignored and only the dev server serves it, so the
@@ -115,6 +133,8 @@ browser; **Copy values** copies just the ones you changed, ready to paste into a
 npm workspaces: `npm install` at the root installs everything.
 
 - `client/`: the game (Vite + Phaser).
+  - `maps/small/`, `maps/large/`: our maps, an SVG source and the PNG built from it
+    (`scripts/build-maps.ts`).
   - `src/sim/`: game simulation and match rules in plain TypeScript (terrain, map generation,
     worm physics, ninja rope, weapons, turns). No Phaser imports, unit-tested in `*.test.ts`.
   - `src/sim/constants.ts`: physics tuning values; `src/sim/weapons.ts`: weapons and blasts.

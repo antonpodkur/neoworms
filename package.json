@@ -10,6 +10,7 @@
     "dev:server": "npm run dev -w server --",
     "build": "npm run build -w client",
     "test": "npm test -w client",
-    "typecheck": "npm run typecheck --workspaces"
+    "typecheck": "npm run typecheck --workspaces",
+    "maps": "npm run maps -w client"
   }
 }

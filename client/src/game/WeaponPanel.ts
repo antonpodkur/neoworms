@@ -112,12 +112,18 @@ export class WeaponPanel {
         const s = this.status(id);
         button.classList.toggle('selected', r === this.row && c === this.col);
         button.classList.toggle('unavailable', !isUsable(s));
-        badge.textContent = s.wait > 0 ? `⏳${s.wait}` : s.ammo === null ? '∞' : String(s.ammo);
+        badge.textContent = s.blocked ? '✕' : s.wait > 0 ? `⏳${s.wait}` : s.ammo === null ? '∞' : String(s.ammo);
       }),
     );
     const { id } = this.cells[this.row][this.col];
     const s = this.status(id);
-    const note = s.wait > 0 ? ` · ready in ${s.wait} turn${s.wait > 1 ? 's' : ''}` : s.ammo === 0 ? ' · none left' : '';
+    const note = s.blocked
+      ? ' · no open sky on this map'
+      : s.wait > 0
+        ? ` · ready in ${s.wait} turn${s.wait > 1 ? 's' : ''}`
+        : s.ammo === 0
+          ? ' · none left'
+          : '';
     this.title.textContent = `${WEAPONS[id].name}${note}`;
   }
 }

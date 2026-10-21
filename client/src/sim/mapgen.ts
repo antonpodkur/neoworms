@@ -20,6 +20,8 @@ export function isMapPreset(value: unknown): value is MapPreset {
 export interface GeneratedMap {
   terrain: Terrain;
   waterLevel: number;
+  /** A rock roof over the map (a cave): no sky, so nothing can be called in from above. */
+  enclosed: boolean;
 }
 
 const WIDTH = 2400;
@@ -77,11 +79,12 @@ export function generateMap(preset: MapPreset, seed: number): GeneratedMap {
     }
   }
 
-  if (MAP_PRESETS.find((p) => p.id === preset)!.enclosed) addCavernShell(mask, width, height, noise);
+  const enclosed = MAP_PRESETS.find((p) => p.id === preset)!.enclosed;
+  if (enclosed) addCavernShell(mask, width, height, noise);
   if (preset === 'rope-gym') addFloatingRocks(mask, width, noise);
   removeSmallChunks(mask, width, height, MIN_CHUNK);
 
-  return { terrain: new Terrain(width, height, mask), waterLevel };
+  return { terrain: new Terrain(width, height, mask), waterLevel, enclosed };
 }
 
 /** Brightness above which an image pixel counts as ground. */
@@ -93,6 +96,7 @@ const IMAGE_WATER_DEPTH = 20;
  * Builds terrain from an RGBA image (e.g. a level outline): dark pixels are air, anything
  * else is ground. Greenish/cyan ground becomes material 2 so it can be drawn differently.
  * `scale` resizes the image (nearest neighbour) so its worms-per-pixel match ours.
+ * It counts as a cave when ground covers most of its top edge.
  */
 export function mapFromImage(rgba: ArrayLike<number>, width: number, height: number, scale = 1): GeneratedMap {
   const w = Math.round(width * scale);
@@ -108,7 +112,9 @@ export function mapFromImage(rgba: ArrayLike<number>, width: number, height: num
       mask[y * w + x] = g > r ? 2 : 1;
     }
   }
-  return { terrain: new Terrain(w, h, mask), waterLevel: h - IMAGE_WATER_DEPTH };
+  let roof = 0;
+  for (let x = 0; x < w; x++) if (mask[x]) roof++;
+  return { terrain: new Terrain(w, h, mask), waterLevel: h - IMAGE_WATER_DEPTH, enclosed: roof > w / 2 };
 }
 
 function layoutIslands(preset: MapPreset, width: number, rng: () => number): Island[] {
@@ -229,7 +235,13 @@ function labelRegions(
 /**
  * Random standing spots on top of ground (island tops and cave floors), above the water
  * and spread apart from each other. Only spots in the main open space count, so no worm
- * starts sealed inside a cave pocket.
+ * starts sealed inside a cave pocket. If the map runs out of room, the spacing shrinks
+ * until everyone fits.
+ *
+ * `mirrored` is for maps whose right half mirrors the left: spots then come in pairs, a spot
+ * and its mirror image, left and right alternating which comes first. Worms take spots in
+ * team order, so with an even number of teams every worm has an opponent starting from the
+ * same place on the other side, and every team has worms on both sides.
  */
 export function findSpawnPoints(
   terrain: Terrain,
@@ -238,26 +250,56 @@ export function findSpawnPoints(
   radius: number,
   rng: () => number,
   minSpacing = 90,
+  mirrored = false,
 ): Vec2[] {
   const { width, height, mask } = terrain;
   const air = labelRegions(mask, width, height, 0);
   const mainAir = air.sizes.indexOf(Math.max(...air.sizes.slice(1)));
+  /** A worm can stand at column x with its feet on row y + 1. */
+  const isFloor = (x: number, y: number) => air.labels[y * width + x] === mainAir && mask[(y + 1) * width + x] !== 0;
+  const spotAt = (x: number, y: number): Vec2 => ({ x: x + 0.5, y: y - radius + 0.5 });
 
   const points: Vec2[] = [];
-  for (let attempt = 0; attempt < 3000 && points.length < count; attempt++) {
-    const x = Math.floor(40 + rng() * (width - 80));
-    const floors: number[] = [];
-    for (let y = radius * 2; y < waterLevel - 20; y++) {
-      const i = y * width + x;
-      if (air.labels[i] === mainAir && mask[i + width]) floors.push(y);
+  const roomFor = (p: Vec2, spacing: number) =>
+    terrain.discFree(p.x, p.y, radius) && points.every((q) => Math.hypot(q.x - p.x, q.y - p.y) >= spacing);
+  // Mirrored maps pick from the left half; the twin lands on the right.
+  const span = mirrored ? width / 2 - 40 : width - 80;
+  let leftFirst = mirrored && rng() < 0.5;
+
+  for (let spacing = minSpacing; points.length < count && spacing >= radius * 2.5; spacing *= 0.7) {
+    for (let attempt = 0; attempt < 3000 && points.length < count; attempt++) {
+      const x = Math.floor(40 + rng() * span);
+      const floors: number[] = [];
+      for (let y = radius * 2; y < waterLevel - 20; y++) if (isFloor(x, y)) floors.push(y);
+      if (floors.length === 0) continue;
+      const y = floors[Math.floor(rng() * floors.length)];
+      const spot = spotAt(x, y);
+      if (!roomFor(spot, spacing)) continue;
+      if (!mirrored || points.length === count - 1) {
+        points.push(spot);
+        continue;
+      }
+      const twinX = width - 1 - x;
+      const twin = spotAt(twinX, y);
+      if (twin.x - spot.x < spacing || !isFloor(twinX, y) || !roomFor(twin, spacing)) continue;
+      points.push(...(leftFirst ? [spot, twin] : [twin, spot]));
+      leftFirst = !leftFirst;
     }
-    if (floors.length === 0) continue;
-    const spot = { x: x + 0.5, y: floors[Math.floor(rng() * floors.length)] - radius + 0.5 };
-    if (!terrain.discFree(spot.x, spot.y, radius)) continue;
-    if (points.some((p) => Math.hypot(p.x - spot.x, p.y - spot.y) < minSpacing)) continue;
-    points.push(spot);
   }
   return points;
+}
+
+/** True if the map's right half is a mirror image of its left (give or take a few pixels). */
+export function isMirrored(terrain: Terrain): boolean {
+  const { width, height, mask } = terrain;
+  let differing = 0;
+  for (let y = 0; y < height; y++) {
+    const row = y * width;
+    for (let x = 0; x < width >> 1; x++) {
+      if ((mask[row + x] === 0) !== (mask[row + width - 1 - x] === 0)) differing++;
+    }
+  }
+  return differing < width * height * 0.0005;
 }
 
 /** Fractal noise in -1..1 built from `octaves` layers of simplex noise. */
