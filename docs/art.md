@@ -35,6 +35,8 @@ built sheet is committed, so playing or working on the game doesn't need Blender
 
 - **Look**: soft Principled materials (skin `#f2a08a`) and a thin dark outline (`#5a2230`): an
   inverted hull, a Solidify modifier whose flipped shell has backface culling.
+- **Animations** are keyed pose to pose with eased curves. Key them by hand in Blender, or from
+  Python with `art/scripts/worm_keys.py` (what Claude uses through the MCP server).
 
 ### Conventions
 
