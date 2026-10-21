@@ -129,7 +129,7 @@ describe('Worm movement', () => {
     expect(back.x).toBeLessThan(plain.x - 3);
   });
 
-  it('takes fall damage from a big drop but not a small one, up to the cap', () => {
+  it('takes fall damage from a big drop but not a small one, up to what top fall speed does', () => {
     const terrain = new Terrain(800, 3000);
     for (let y = 2900; y < 3000; y++) for (let x = 0; x < 800; x++) terrain.mask[y * 800 + x] = 1;
     const world = new World(terrain, 5000);
@@ -139,7 +139,11 @@ describe('Worm movement', () => {
     run(world, 600);
     expect(small.hp).toBe(100);
     expect(big.hp).toBeLessThan(100);
-    expect(huge.hp).toBe(100 - PHYS.maxFallDamage);
+    // Worms stop speeding up at wormMaxFallSpeed, so any long drop does the same damage
+    // (15–17 in WR footage, from 23–26 worm heights).
+    const share = (PHYS.wormMaxFallSpeed - PHYS.safeLandingSpeed) / (PHYS.maxDamageLandingSpeed - PHYS.safeLandingSpeed);
+    expect(huge.hp).toBe(100 - Math.round(PHYS.maxFallDamage * Math.min(1, share)));
+    expect(huge.hp).toBe(84);
   });
 
   it('falls when the ground under it is blown away', () => {

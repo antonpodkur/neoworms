@@ -139,7 +139,7 @@ export interface ProjectileContext {
   readonly worms: Worm[];
   readonly wind: number;
   readonly rng: () => number;
-  explode(x: number, y: number, blast: Blast): void;
+  explode(x: number, y: number, blast: Blast, heading?: number): void;
   spawn(launch: Launch): void;
   emit(event: SimEvent): void;
 }
@@ -209,7 +209,8 @@ function roll(p: Projectile, ctx: ProjectileContext): void {
   const bounce = spec.bounce ?? PHYS.grenadeBounce;
   bounceOffWorms(p, r, bounce, ctx.worms);
   if (!n) return;
-  bounceOff(p, n, bounce, PHYS.grenadeFriction);
+  const into = -(p.vx * n.x + p.vy * n.y);
+  bounceOff(p, n, into < PHYS.grenadeMinBounceSpeed ? 0 : bounce, PHYS.grenadeFriction);
   // At rest once it's slow on a floor, or wedged where it can't go anywhere (on steep pixel
   // slopes the bounce can leave some speed that never turns into movement).
   const moved = Math.hypot(p.x - p.prevX, p.y - p.prevY);
@@ -280,7 +281,8 @@ function tickMine(p: Projectile, ctx: ProjectileContext): void {
   if (p.fuseTicks === null) {
     const near = (w: Worm) => w.alive && Math.hypot(w.x - p.x, w.y - p.y) < PHYS.mineTriggerRadius;
     if (!p.dud && ctx.worms.some(near)) {
-      p.fuseTicks = Math.round(PHYS.mineFuse * TICK_RATE);
+      const fuse = PHYS.mineFuseMin + ctx.rng() * (PHYS.mineFuseMax - PHYS.mineFuseMin);
+      p.fuseTicks = Math.round(fuse * TICK_RATE);
       ctx.emit({ type: 'mineTriggered', id: p.id });
     }
     return;
@@ -298,7 +300,9 @@ function tickMine(p: Projectile, ctx: ProjectileContext): void {
 function explodeProjectile(p: Projectile, ctx: ProjectileContext): void {
   p.dead = true;
   const spec = KINDS[p.kind];
-  ctx.explode(p.x, p.y, spec.blast);
+  // Only things in flight have a heading; a grenade or mine lying still throws worms either way.
+  const heading = Math.hypot(p.vx, p.vy) > SETTLE_SPEED ? Math.sign(p.vx) || undefined : undefined;
+  ctx.explode(p.x, p.y, spec.blast, heading);
   if (!spec.split) return;
   // Cluster fragments and banana bomblets fan out upwards from the crater.
   const { kind, count, speed } = spec.split;

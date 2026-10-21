@@ -200,7 +200,7 @@ function stepSideways(worm: Worm, dir: 1 | -1, terrain: Terrain): boolean {
 }
 
 function fly(worm: Worm, input: WormInput, terrain: Terrain): number {
-  worm.vy = Math.min(worm.vy + PHYS.gravity * DT, PHYS.maxFallSpeed);
+  worm.vy = Math.min(worm.vy + PHYS.gravity * DT, PHYS.wormMaxFallSpeed);
   if (worm.afterTouch > 0 && input.left !== input.right) {
     worm.vx += (input.left ? -1 : 1) * worm.afterTouch * PHYS.gravity * DT;
   }
@@ -215,8 +215,8 @@ function collide(worm: Worm, n: Vec2): number {
   const speed = Math.hypot(worm.vx, worm.vy);
 
   if (isFloor && (!worm.knocked || speed < PHYS.knockLandSpeed)) {
-    // Thrown worms already took blast damage, so only regular falls hurt.
-    const damage = worm.knocked ? 0 : fallDamage(-vn);
+    // Hitting the floor hard hurts, thrown or not.
+    const damage = fallDamage(-vn);
     // Like WR, thrown worms slide on after landing, and so do worms coming in fast off the rope.
     const share = worm.knocked
       ? PHYS.slideShare
