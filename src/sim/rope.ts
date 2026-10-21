@@ -29,13 +29,14 @@ const WRAP_SKIP = 2;
 /** How far past straight (as a sine) the rope must swing back before a bend comes undone. */
 const UNWRAP_THRESHOLD = 0.001;
 
-/** Space: shoot the rope at the aim angle, or let go if already hanging on one. */
-export function fireOrRelease(worm: Worm): void {
-  if (worm.rope?.phase === 'attached') {
-    worm.rope = null; // the worm keeps its swing speed and flies off
-    return;
-  }
-  if (worm.rope) return; // hook still flying
+/** Lets go of the rope. The worm keeps its swing speed and can shoot the rope again mid-air. */
+export function releaseRope(worm: Worm): void {
+  worm.rope = null;
+  worm.ropeChain = true;
+}
+
+/** Shoots the hook out at the aim angle. */
+export function shootRope(worm: Worm): void {
   worm.rope = {
     phase: 'shooting',
     x: worm.x,

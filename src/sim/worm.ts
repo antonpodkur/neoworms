@@ -1,7 +1,8 @@
 import { DT, PHYS, TICK_RATE } from './constants';
 import { bounceOff, moveDisc, pushOut } from './physics';
-import { advanceHook, fireOrRelease, swingOnRope, type Rope } from './rope';
+import { advanceHook, swingOnRope, type Rope } from './rope';
 import type { Terrain, Vec2 } from './terrain';
+import type { WeaponId } from './weapons';
 
 export interface WormInput {
   left: boolean;
@@ -12,7 +13,14 @@ export interface WormInput {
   jump: boolean;
   /** Shortcut straight to a backflip. */
   backflip: boolean;
+  /** Space pressed this tick... */
   fire: boolean;
+  /** ...and whether it's still held (for charging shots). */
+  fireHeld: boolean;
+  /** Tab: cycle the selected weapon's option (grenade fuse). */
+  toggle: boolean;
+  /** A weapon picked from the weapon menu this tick. */
+  select: WeaponId | null;
 }
 
 export const NO_INPUT: WormInput = {
@@ -23,6 +31,9 @@ export const NO_INPUT: WormInput = {
   jump: false,
   backflip: false,
   fire: false,
+  fireHeld: false,
+  toggle: false,
+  select: null,
 };
 
 export interface Worm {
@@ -49,6 +60,13 @@ export interface Worm {
   /** How strongly ← → steer this flight, as a fraction of gravity; 0 when it can't be steered. */
   afterTouch: number;
   rope: Rope | null;
+  /** Let go of the rope and not landed yet: Space shoots the rope again, Enter drops weapons. */
+  ropeChain: boolean;
+  weapon: WeaponId;
+  /** Grenade fuse in seconds. */
+  fuse: number;
+  /** Shot power (0..1) while Space is held; null when not charging. */
+  charge: number | null;
   hp: number;
   alive: boolean;
 }
@@ -72,6 +90,10 @@ export function createWorm(id: number, name: string, team: number, x: number, y:
     pendingJump: null,
     afterTouch: 0,
     rope: null,
+    ropeChain: false,
+    weapon: 'rope',
+    fuse: 3,
+    charge: null,
     hp,
     alive: true,
   };
@@ -79,7 +101,6 @@ export function createWorm(id: number, name: string, team: number, x: number, y:
 
 /** Advances one worm by one tick. Returns fall damage taken on landing (0 if none). */
 export function stepWorm(worm: Worm, input: WormInput, terrain: Terrain): number {
-  if (input.fire) fireOrRelease(worm);
   advanceHook(worm, terrain);
   if (worm.rope?.phase === 'attached') {
     swingOnRope(worm, worm.rope, input, terrain);
@@ -199,6 +220,7 @@ function land(worm: Worm): void {
   worm.grounded = true;
   worm.knocked = false;
   worm.afterTouch = 0;
+  worm.ropeChain = false;
 }
 
 /** Grows from nothing at the safe landing speed up to the cap. */

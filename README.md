@@ -1,6 +1,7 @@
 # NeoWorms
 
-A Worms-style artillery game for the browser. Currently a single-player sandbox with the ninja rope (milestone 2);
+A Worms-style artillery game for the browser. Currently a single-player sandbox with the ninja rope and weapons
+(milestone 3, no turns yet);
 see [ROADMAP.md](ROADMAP.md) for where it's headed.
 
 ## Run it
@@ -23,13 +24,16 @@ Other scripts: `npm test` (simulation tests), `npm run typecheck`, `npm run buil
 | Enter | jump (tap twice quickly: backflip) |
 | ← → in the air | steer the jump |
 | Backspace | backflip |
-| Space | shoot the ninja rope / let go (works mid-air too) |
+| Space | fire the selected weapon (hold to charge the bazooka and grenade) |
+| Shift | weapon menu (← → to choose, Space or Enter to pick) |
+| Tab | toggle: grenade fuse 1–5 s |
+| Space with the rope | shoot the rope / let go / shoot again mid-air |
 | ← → on rope | swing |
 | ↑ ↓ on rope | climb / descend |
-| Tab | next worm |
-| Left click | explosion (debug) |
+| Enter on rope | drop the selected grenade or mine |
+| N | next worm |
 | Mouse wheel | zoom |
-| Right drag / Shift + drag | pan |
+| Right drag / Alt + drag | pan |
 | R | respawn worms (new seed; generated maps get new terrain) |
 | M | next map (Rope Gym is made for rope practice) |
 | T | show/hide the map picker and tuning sliders |

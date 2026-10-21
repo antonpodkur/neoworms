@@ -48,6 +48,19 @@ export function createTuningPanel(): void {
   worm.add(PHYS, 'maxFallDamage', 0, 100, 1).name('max fall damage');
   worm.close();
 
+  const weapons = gui.addFolder('Weapons');
+  weapons.add(PHYS, 'chargeTime', 0.3, 3, 0.1).name('charge time (s)');
+  weapons.add(PHYS, 'bazookaSpeed', 200, 1500, 10).name('bazooka speed');
+  weapons.add(PHYS, 'windMax', 0, 400, 5).name('wind strength');
+  weapons.add(PHYS, 'grenadeSpeed', 200, 1500, 10).name('grenade speed');
+  weapons.add(PHYS, 'grenadeBounce', 0, 1, 0.05).name('grenade bounce');
+  weapons.add(PHYS, 'mineArmTime', 0, 5, 0.1).name('mine arm time (s)');
+  weapons.add(PHYS, 'mineTriggerRadius', 5, 80, 1).name('mine trigger radius');
+  weapons.add(PHYS, 'mineFuse', 0, 5, 0.1).name('mine fuse (s)');
+  weapons.add(PHYS, 'mineDudChance', 0, 1, 0.05).name('mine dud chance');
+  weapons.add(PHYS, 'mapMines', 0, 30, 1).name('mines on map (R)');
+  weapons.close();
+
   const blast = gui.addFolder('Explosions');
   blast.add(PHYS, 'blastKnockback', 0, 1500, 10).name('knockback');
   blast.add(PHYS, 'blastLift', 0, 600, 10).name('lift');

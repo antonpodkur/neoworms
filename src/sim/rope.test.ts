@@ -141,7 +141,7 @@ describe('Ninja rope', () => {
   it('is knocked off by explosions', () => {
     const world = openWorld();
     const worm = hangingWorm(world, 150, 0);
-    world.explode(worm.x + 10, worm.y, 30, 10);
+    world.explode(worm.x + 10, worm.y, { radius: 30, damage: 10, reach: 38, push: 1 });
     expect(worm.rope).toBeNull();
   });
 });

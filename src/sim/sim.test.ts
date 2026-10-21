@@ -166,7 +166,7 @@ describe('Explosions', () => {
     const near = world.addWorm('A', 0, 400, restingY(GROUND));
     const far = world.addWorm('B', 0, 700, restingY(GROUND));
     run(world, 10);
-    world.explode(410, GROUND, 40, 40);
+    world.explode(410, GROUND, { radius: 40, damage: 40, reach: 48, push: 1 });
 
     expect(world.terrain.isSolid(410, GROUND + 10)).toBe(false);
     expect(near.hp).toBeLessThan(100);
@@ -183,7 +183,7 @@ describe('Explosions', () => {
     const a = world.addWorm('A', 0, 400, restingY(GROUND));
     const b = world.addWorm('B', 1, 700, restingY(GROUND));
     expect(world.activeWormId).toBe(a.id);
-    world.explode(400, GROUND - R, 30, 500);
+    world.explode(400, GROUND - R, { radius: 30, damage: 500, reach: 38, push: 1 });
     expect(a.alive).toBe(false);
     expect(world.activeWormId).toBe(b.id);
   });

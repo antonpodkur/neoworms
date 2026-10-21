@@ -81,5 +81,5 @@ parachute), **Toggle** (cycle a weapon's option: fuse, direction, polarity, worm
 Ninja rope, in the game's words: aim with Aim, attach and detach with Fire, lengthen and
 shorten with Aim once attached, drop a weapon with AltFire, and it doesn't end the turn.
 
-Our bindings: ← → WormMove, ↑ ↓ Aim, **Space = Fire**, **Enter = Jump** (as the player uses
-them in WR). AltFire, Toggle and WeaponPanel get keys when weapons arrive (milestone 3).
+Our bindings (chosen by the player): ← → WormMove, ↑ ↓ Aim, **Space = Fire**, **Enter = Jump**,
+**Shift = WeaponPanel**, **Tab = Toggle**, and **Enter on the rope = AltFire** (drop a weapon).

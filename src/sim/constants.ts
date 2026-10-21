@@ -73,6 +73,25 @@ const defaults = {
   ropeCanGoSlack: true,
   /** Upward hop when the rope hooks in while standing, so the worm lifts off (1.5× a jump). */
   ropeAutoHop: 231,
+
+  /** Seconds of holding Space to reach full power. */
+  chargeTime: 1.2,
+  /** Launch speed at full power. */
+  bazookaSpeed: 650,
+  grenadeSpeed: 520,
+  /** Push on bazooka shells at full wind strength (wind ranges -1..1). */
+  windMax: 120,
+  grenadeBounce: 0.45,
+  grenadeFriction: 0.85,
+  /** Seconds after placing before a mine can be set off, so its owner can get away. */
+  mineArmTime: 2,
+  /** A worm this close sets an armed mine off... */
+  mineTriggerRadius: 24,
+  /** ...and it explodes this many seconds later. */
+  mineFuse: 1.2,
+  mineDudChance: 0.1,
+  /** Mines scattered on the map at the start. */
+  mapMines: 6,
 };
 
 export type Physics = typeof defaults;

@@ -46,6 +46,79 @@
         color: #ffd23f;
         font-weight: 600;
       }
+      #wind {
+        position: fixed;
+        bottom: 14px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        border-radius: 8px;
+        background: rgba(10, 20, 40, 0.72);
+        color: #fff;
+        font-weight: 600;
+        pointer-events: none;
+      }
+      #wind .track {
+        position: relative;
+        width: 160px;
+        height: 8px;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.15);
+      }
+      #wind .track::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        top: -3px;
+        bottom: -3px;
+        width: 2px;
+        background: rgba(255, 255, 255, 0.6);
+      }
+      #wind .bar {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        border-radius: 4px;
+        background: linear-gradient(90deg, #7fd3ff, #4d9dff);
+      }
+      #weapon-panel {
+        position: fixed;
+        right: 16px;
+        bottom: 56px;
+        display: flex;
+        gap: 8px;
+        padding: 10px;
+        border-radius: 10px;
+        background: rgba(10, 20, 40, 0.85);
+      }
+      #weapon-panel[hidden] {
+        display: none;
+      }
+      #weapon-panel .weapon {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        width: 84px;
+        padding: 8px 4px;
+        border: 2px solid transparent;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.08);
+        color: #fff;
+        font: 600 12px system-ui, sans-serif;
+        cursor: pointer;
+      }
+      #weapon-panel .weapon .icon {
+        font-size: 24px;
+        line-height: 1;
+      }
+      #weapon-panel .weapon.selected {
+        border-color: #ffd23f;
+        background: rgba(255, 210, 63, 0.18);
+      }
     </style>
   </head>
   <body>
@@ -59,18 +132,21 @@
           <tr><td>Enter</td><td>jump (tap twice quickly: backflip)</td></tr>
           <tr><td>← → in the air</td><td>steer the jump</td></tr>
           <tr><td>Backspace</td><td>backflip</td></tr>
-          <tr><td>Space</td><td>shoot ninja rope / let go</td></tr>
-          <tr><td>On rope</td><td>← → swing, ↑ ↓ climb, Space again mid-air</td></tr>
-          <tr><td>Tab</td><td>next worm</td></tr>
-          <tr><td>Left click</td><td>explosion</td></tr>
+          <tr><td>Space</td><td>fire (hold to charge) / shoot rope / let go</td></tr>
+          <tr><td>Shift</td><td>weapon menu</td></tr>
+          <tr><td>Tab</td><td>toggle: grenade fuse</td></tr>
+          <tr><td>On rope</td><td>← → swing, ↑ ↓ climb, Enter drops grenade/mine</td></tr>
+          <tr><td>N</td><td>next worm</td></tr>
           <tr><td>Wheel</td><td>zoom</td></tr>
-          <tr><td>Right drag</td><td>pan (or Shift + drag)</td></tr>
+          <tr><td>Right drag</td><td>pan (or Alt + drag)</td></tr>
           <tr><td>R / M</td><td>respawn (new seed) / next map</td></tr>
           <tr><td>T</td><td>map picker + tuning sliders</td></tr>
           <tr><td>H</td><td>hide this help</td></tr>
         </table>
       </div>
     </div>
+    <div id="wind"><span>Wind</span><div class="track"><div class="bar"></div></div></div>
+    <div id="weapon-panel" hidden></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
