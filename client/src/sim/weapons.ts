@@ -122,7 +122,13 @@ export const FUSES = [1, 2, 3, 4, 5];
 /** WR level-outline pixels to ours: a WR worm is 19.5 px tall, ours 16 (docs/wr-reference.md). */
 export const WR_SCALE = 16 / 19.5;
 
-/** A row of WR's explosion table (its level pixels and force units) converted to a Blast. */
+/**
+ * Level-outline pixels per length unit of WR's explosion table. Not 1: craters, damage and push
+ * measured in WR footage on a map of known shape come out ~1.85× the table's numbers.
+ */
+const WR_TABLE_UNIT = 1.85;
+
+/** A row of WR's explosion table (its length and force units) converted to a Blast. */
 function wr(row: {
   crater: number;
   damage: [number, number];
@@ -132,7 +138,7 @@ function wr(row: {
   lift?: number;
   waterPush?: number;
 }): Blast {
-  const px = (v: number) => Math.round(v * WR_SCALE * 10) / 10;
+  const px = (v: number) => Math.round(v * WR_TABLE_UNIT * WR_SCALE * 10) / 10;
   return {
     radius: px(row.crater),
     damage: row.damage,
@@ -159,7 +165,8 @@ export function roundBlast(radius: number, damage: number, reach: number, push =
 
 /**
  * Explosions from Worms Revolution's payload table (docs/wr-reference.md). The grenade had no
- * row in the export and the mine's row repeats the Old Woman's, so those two are by feel.
+ * row in the export, so it uses the bazooka's; footage shows the mine is the bazooka's too (the
+ * export's "MineRound" repeats the Old Woman's numbers, a parsing slip).
  */
 export const BLASTS = {
   bazooka: wr({ crater: 26, damage: [1, 45], damageRange: [6, 47], push: [5, 130], pushRange: [4, 46] }),
@@ -169,7 +176,7 @@ export const BLASTS = {
   /** WR's BananaBombletRound, used for the banana and each of its bomblets. */
   banana: wr({ crater: 34, damage: [1, 65], damageRange: [6, 63], push: [5, 165], pushRange: [4, 62], lift: 1.3 }),
   dynamite: wr({ crater: 34, damage: [1, 65], damageRange: [6, 63], push: [5, 170], pushRange: [4, 62], lift: 1.3 }),
-  mine: roundBlast(24, 50, 44, 1.2),
+  mine: wr({ crater: 26, damage: [1, 45], damageRange: [6, 47], push: [5, 130], pushRange: [4, 46] }),
   oldWoman: wr({ crater: 52, damage: [1, 75], damageRange: [7, 73], push: [5, 230], pushRange: [4, 70] }),
   airstrike: wr({ crater: 14, damage: [1, 45], damageRange: [6, 20], push: [5, 70], pushRange: [3, 19], lift: 1.3 }),
   /** A worm at 0 HP blows up at the end of the turn (WR "WormDeathBlast"). */
@@ -185,13 +192,18 @@ export interface Melee {
   damage: number;
   /** WR force units, like Blast.push. */
   push: number;
-  /** Swing along the aim (bat) or straight ahead (prod). */
+  /** Swing along the aim (bat), or this many degrees above straight ahead (prod). */
   aimed: boolean;
+  angle?: number;
 }
 
+/**
+ * The prod is measured: it pokes a worm about 0.75–1 worm height away up and over at ~85 px/s,
+ * ~55° above horizontal. The bat's numbers are WR's table.
+ */
 export const MELEE: Record<'bat' | 'prod', Melee> = {
   bat: { reach: 16 + 10 * WR_SCALE, damage: 30, push: 200, aimed: true },
-  prod: { reach: 16 + 10 * WR_SCALE, damage: 0, push: 50, aimed: false },
+  prod: { reach: 18, damage: 0, push: 40, aimed: false, angle: 55 },
 };
 
 /**
@@ -284,8 +296,9 @@ function place(worm: Worm, kind: ProjectileKind, ctx: WeaponContext): void {
 }
 
 function swing(worm: Worm, melee: Melee, ctx: WeaponContext): void {
-  const dirX = melee.aimed ? Math.cos(worm.aim) * worm.facing : worm.facing;
-  const dirY = melee.aimed ? -Math.sin(worm.aim) : 0;
+  const angle = melee.aimed ? worm.aim : ((melee.angle ?? 0) * Math.PI) / 180;
+  const dirX = Math.cos(angle) * worm.facing;
+  const dirY = -Math.sin(angle);
   ctx.hit(worm, dirX, dirY, melee);
   ctx.weaponUsed(worm.weapon);
 }

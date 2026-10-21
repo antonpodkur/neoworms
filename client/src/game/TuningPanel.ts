@@ -57,7 +57,8 @@ export function createTuningPanel(): void {
   weapons.add(PHYS, 'grenadeBounce', 0, 1, 0.05).name('grenade bounce');
   weapons.add(PHYS, 'mineArmTime', 0, 5, 0.1).name('mine arm time (s)');
   weapons.add(PHYS, 'mineTriggerRadius', 5, 80, 1).name('mine trigger radius');
-  weapons.add(PHYS, 'mineFuse', 0, 5, 0.1).name('mine fuse (s)');
+  weapons.add(PHYS, 'mineFuseMin', 0, 5, 0.1).name('mine fuse min (s)');
+  weapons.add(PHYS, 'mineFuseMax', 0, 5, 0.1).name('mine fuse max (s)');
   weapons.add(PHYS, 'mineDudChance', 0, 1, 0.05).name('mine dud chance');
   weapons.add(PHYS, 'mapMines', 0, 30, 1).name('mines on map (R)');
   weapons.close();
@@ -65,6 +66,7 @@ export function createTuningPanel(): void {
   const blast = gui.addFolder('Explosions');
   blast.add(PHYS, 'blastKnockback', 0, 1500, 10).name('knockback');
   blast.add(PHYS, 'blastLift', 0, 600, 10).name('lift');
+  blast.add(PHYS, 'blastMinAngle', 0, 90, 1).name('min launch angle (°)');
   blast.close();
 
   gui.add({ copy: copyValues }, 'copy').name('Copy values');

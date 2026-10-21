@@ -156,9 +156,10 @@ export class World implements ProjectileContext, WeaponContext {
 
   /**
    * Blows a crater in the terrain. Worms and projectiles within the blast's reach get thrown
-   * (worms also take damage), fading out with distance; mines in reach go off too.
+   * (worms also take damage), fading out with distance; mines in reach go off too. `heading`
+   * (-1 or 1) is the way the projectile was travelling: something hit dead-on is thrown that way.
    */
-  explode(x: number, y: number, blast: Blast): void {
+  explode(x: number, y: number, blast: Blast, heading?: number): void {
     this.terrain.carve(x, y, blast.radius);
     this.events.push({ type: 'carve', x, y, r: blast.radius }, { type: 'explosion', x, y, r: blast.radius });
     const underwater = y > this.waterLevel;
@@ -167,13 +168,13 @@ export class World implements ProjectileContext, WeaponContext {
       if (!worm.alive) continue;
       const dx = worm.x - x;
       const dy = worm.y - y;
-      const push = blastPush(dx, dy, blast, underwater);
+      const push = blastPush(dx, dy, blast, underwater, heading);
       if (push) this.throwWorm(worm, push.vx, push.vy);
       const damage = falloff(Math.hypot(dx, dy), blast.damage, blast.damageRange);
       if (damage > 0) this.damage(worm, Math.max(1, Math.round(damage)));
     }
     for (const p of this.projectiles) {
-      const push = p.dead ? null : blastPush(p.x - x, p.y - y, blast, underwater);
+      const push = p.dead ? null : blastPush(p.x - x, p.y - y, blast, underwater, heading);
       if (push) blastProjectile(p, push.vx, push.vy);
     }
   }
@@ -270,16 +271,38 @@ function falloff(dist: number, [min, max]: [number, number], [inner, outer]: [nu
 }
 
 /** How hard a blast throws something at offset (dx, dy) from its centre, or null if out of reach. */
-function blastPush(dx: number, dy: number, blast: Blast, underwater: boolean): { vx: number; vy: number } | null {
+function blastPush(
+  dx: number,
+  dy: number,
+  blast: Blast,
+  underwater: boolean,
+  heading?: number,
+): { vx: number; vy: number } | null {
   const dist = Math.hypot(dx, dy);
   const force = falloff(dist, blast.push, blast.pushRange) * (underwater ? blast.waterPush : 1);
   if (force <= 0) return null;
   const speed = (PHYS.blastKnockback * force) / BAZOOKA_PUSH;
-  const ux = dist > 0.001 ? dx / dist : 0;
-  const uy = dist > 0.001 ? dy / dist : -1;
+  const dir = launchDirection(dx, dy, dist, heading);
   // A little extra lift makes things fly in an arc instead of sliding along the ground.
   const lift = (PHYS.blastLift * blast.lift * force) / BAZOOKA_PUSH;
-  return { vx: ux * speed, vy: uy * speed - lift };
+  return { vx: dir.x * speed, vy: dir.y * speed - lift };
+}
+
+/** Closer than this sideways to the blast counts as dead-on: the projectile's heading decides the side. */
+const DEAD_ON = 4;
+
+/**
+ * Away from the blast, but never flatter than PHYS.blastMinAngle above horizontal: in WR a
+ * blast beside a worm still throws it steeply up, on the side it was on, and a dead-on hit
+ * throws it on along the projectile's way.
+ */
+function launchDirection(dx: number, dy: number, dist: number, heading?: number): { x: number; y: number } {
+  const deadOn = Math.abs(dx) < DEAD_ON && heading !== undefined;
+  if (dist < 0.001 && !deadOn) return { x: 0, y: -1 };
+  const min = (PHYS.blastMinAngle * Math.PI) / 180;
+  if (!deadOn && Math.atan2(-dy, Math.abs(dx)) >= min) return { x: dx / dist, y: dy / dist };
+  const side = deadOn ? Math.sign(heading) || 1 : dx < 0 ? -1 : 1;
+  return { x: side * Math.cos(min), y: -Math.sin(min) };
 }
 
 /** Places every team's worms on the map (alternating teams across it) and scatters mines. */

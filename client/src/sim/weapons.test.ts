@@ -166,7 +166,7 @@ describe('Mines', () => {
     const armed = run(world, 10);
     expect(armed.some((e) => e.type === 'mineTriggered')).toBe(true);
     const boom = untilExplosion(world)!;
-    expect(boom.ticks).toBeLessThanOrEqual(PHYS.mineFuse * 60);
+    expect(boom.ticks).toBeLessThanOrEqual(PHYS.mineFuseMax * 60);
     expect(worm.hp).toBeLessThan(100);
   });
 
@@ -175,7 +175,7 @@ describe('Mines', () => {
     const world = groundWorld();
     standingWorm(world, 200, 'rope');
     world.spawn({ kind: 'mine', x: 210, y: restingY(GROUND), vx: 0, vy: 0, armed: true });
-    const events = run(world, 120);
+    const events = run(world, (PHYS.mineFuseMax + 0.5) * 60); // past the longest fuse
     expect(events.some((e) => e.type === 'dud')).toBe(true);
     expect(events.some((e) => e.type === 'explosion')).toBe(false);
     expect(world.projectiles).toHaveLength(1);
@@ -243,6 +243,26 @@ describe('Explosions (Worms Revolution table)', () => {
     expect(near.hp).toBe(100 - blast.damage[1]);
     expect(far.hp).toBeLessThan(100);
     expect(far.hp).toBeGreaterThanOrEqual(100 - 3);
+  });
+
+  it('throw worms steeply upwards even from the side', () => {
+    const world = groundWorld();
+    const worm = world.addWorm('S', 0, 300, restingY(GROUND));
+    run(world, 5);
+    world.explode(worm.x - 20, worm.y + 2, BLASTS.bazooka); // beside it, almost level
+    const angle = (Math.atan2(-worm.vy, Math.abs(worm.vx)) * 180) / Math.PI;
+    expect(worm.vx).toBeGreaterThan(0); // away from the blast
+    expect(angle).toBeGreaterThanOrEqual(PHYS.blastMinAngle);
+  });
+
+  it('throw a worm hit dead-on the way the shell was going', () => {
+    const world = groundWorld();
+    const worm = world.addWorm('S', 0, 300, restingY(GROUND));
+    run(world, 5);
+    world.explode(worm.x, worm.y - 9, BLASTS.bazooka, -1); // came down on its head, heading left
+    const angle = (Math.atan2(-worm.vy, Math.abs(worm.vx)) * 180) / Math.PI;
+    expect(worm.vx).toBeLessThan(0);
+    expect(angle).toBeGreaterThanOrEqual(PHYS.blastMinAngle);
   });
 
   it('push less when they go off under water', () => {
@@ -332,7 +352,9 @@ describe('Melee', () => {
     const events = run(world, 1, { fire: true });
     expect(events).toContainEqual(expect.objectContaining({ type: 'hit', landed: true }));
     expect(target.hp).toBe(100 - MELEE.bat.damage);
-    expect(target.vx).toBeGreaterThan(300);
+    // Along the 30° swing at the bat's strength (push 200 vs. the bazooka's 130).
+    const speed = (PHYS.blastKnockback * MELEE.bat.push) / 130;
+    expect(target.vx).toBeCloseTo(speed * Math.cos(Math.PI / 6), 0);
     expect(target.vy).toBeLessThan(0);
   });
 
@@ -373,6 +395,26 @@ describe('Impact', () => {
     expect(worm.grounded).toBe(true);
     expect(worm.slide).toBe(0);
     expect(worm.x).toBe(300);
+  });
+
+  it("grenades bounce off hard landings but not soft ones", () => {
+    const landing = (vy: number) => {
+      const world = groundWorld();
+      world.spawn({ kind: 'grenade', x: 300, y: GROUND - 5, vx: 0, vy, fuse: 5 });
+      run(world, 1);
+      return world.projectiles[0].vy;
+    };
+    expect(landing(100)).toBeGreaterThanOrEqual(0); // soft: stays down
+    expect(landing(400)).toBeLessThan(0); // hard: bounces back up
+  });
+
+  it('thrown worms take fall damage when they land hard', () => {
+    const world = groundWorld();
+    const worm = standingWorm(world, 300, 'rope');
+    Object.assign(worm, { y: worm.y - 3, vx: 0, vy: PHYS.wormMaxFallSpeed, grounded: false, knocked: true });
+    run(world, 5);
+    expect(worm.grounded).toBe(true);
+    expect(worm.hp).toBeLessThan(100);
   });
 
   it('grenades bounce off worms instead of passing through', () => {
