@@ -10,7 +10,7 @@ import {
 } from './projectiles';
 import { mulberry32, nextRandom } from './rng';
 import type { Terrain } from './terrain';
-import { BLASTS, useWeapons, type Blast, type Melee, type WeaponContext } from './weapons';
+import { BLASTS, useWeapons, type Blast, type Melee, type WeaponContext, type WeaponId } from './weapons';
 import { createWorm, NO_INPUT, stepWorm, type Worm, type WormInput } from './worm';
 
 /**
@@ -26,7 +26,7 @@ export type SimEvent =
   | { type: 'mineTriggered'; id: number }
   | { type: 'dud'; x: number; y: number }
   | { type: 'hit'; x: number; y: number; landed: boolean }
-  | { type: 'weaponUsed' };
+  | { type: 'weaponUsed'; weapon: WeaponId };
 
 /** Everything about a World that changes as the game is played (all but the terrain). */
 export interface WorldState {
@@ -141,8 +141,8 @@ export class World implements ProjectileContext, WeaponContext {
     this.projectiles.push(createProjectile(this.nextProjectileId++, launch));
   }
 
-  weaponUsed(): void {
-    this.events.push({ type: 'weaponUsed' });
+  weaponUsed(weapon: WeaponId): void {
+    this.events.push({ type: 'weaponUsed', weapon });
   }
 
   changeWind(): void {

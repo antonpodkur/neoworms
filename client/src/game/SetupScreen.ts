@@ -1,5 +1,6 @@
 import { MAX_PLAYERS } from '../../../shared/relay';
 import { DEFAULT_SETTINGS, type MatchSettings } from '../sim/match';
+import { SCHEMES, type SchemeId } from '../sim/weapons';
 import type { OnlineSession } from '../net/OnlineSession';
 import type { MapEntry } from './maps';
 import { teamColorCss } from './WormView';
@@ -206,6 +207,7 @@ export class SetupScreen {
       ${select('turnTime', 'Turn time', [[30, '30 s'], [45, '45 s'], [60, '60 s'], [90, '90 s'], [0, 'No limit']], s.turnTime)}
       ${select('wormHp', 'Worm health', [[50, '50'], [100, '100'], [150, '150'], [200, '200']], s.wormHp)}
       ${select('suddenDeathAfter', 'Sudden death', [[5, 'after 5 min'], [10, 'after 10 min'], [15, 'after 15 min'], [20, 'after 20 min'], [0, 'Never']], s.suddenDeathAfter)}
+      ${select('scheme', 'Weapons', Object.entries(SCHEMES).map(([id, scheme]) => [id, scheme.name]), s.scheme)}
       ${select('map', 'Map', this.maps.map((m) => [m.id, m.name]), this.mapId)}
     </div>`;
   }
@@ -215,6 +217,7 @@ export class SetupScreen {
     for (const el of body.querySelectorAll<HTMLSelectElement>('.options select')) {
       el.addEventListener('change', () => {
         if (el.name === 'map') this.mapId = el.value;
+        else if (el.name === 'scheme') this.settings = { ...this.settings, scheme: el.value as SchemeId };
         else this.settings = { ...this.settings, [el.name]: Number(el.value) };
       });
     }

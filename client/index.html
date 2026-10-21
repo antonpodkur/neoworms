@@ -89,10 +89,29 @@
         right: 16px;
         bottom: 56px;
         display: flex;
-        gap: 8px;
-        padding: 10px;
+        flex-direction: column;
+        gap: 4px;
+        padding: 8px;
         border-radius: 10px;
-        background: rgba(10, 20, 40, 0.85);
+        background: rgba(10, 20, 40, 0.88);
+        color: #fff;
+        font: 600 12px system-ui, sans-serif;
+        user-select: none;
+      }
+      #weapon-panel .title {
+        padding: 0 2px 4px;
+        min-height: 16px;
+        text-align: center;
+      }
+      #weapon-panel .row {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      #weapon-panel .key {
+        width: 24px;
+        color: #8fa6c8;
+        font-size: 11px;
       }
       #hud-help[hidden],
       #weapon-panel[hidden],
@@ -105,19 +124,26 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 4px;
-        width: 84px;
-        padding: 8px 4px;
+        gap: 2px;
+        width: 48px;
+        padding: 5px 2px 3px;
         border: 2px solid transparent;
-        border-radius: 8px;
+        border-radius: 7px;
         background: rgba(255, 255, 255, 0.08);
         color: #fff;
-        font: 600 12px system-ui, sans-serif;
+        font: 600 11px system-ui, sans-serif;
         cursor: pointer;
       }
       #weapon-panel .weapon .icon {
-        font-size: 24px;
+        font-size: 22px;
         line-height: 1;
+      }
+      #weapon-panel .weapon.unavailable .icon {
+        filter: grayscale(1);
+        opacity: 0.35;
+      }
+      #weapon-panel .weapon.unavailable .badge {
+        color: #ff8a8a;
       }
       #weapon-panel .weapon.selected {
         border-color: #ffd23f;
@@ -393,7 +419,8 @@
           <tr><td>← → in the air</td><td>steer the jump</td></tr>
           <tr><td>Backspace</td><td>backflip</td></tr>
           <tr><td>Space</td><td>fire (hold to charge) / shoot rope / let go</td></tr>
-          <tr><td>Shift</td><td>weapon menu</td></tr>
+          <tr><td>Shift / right click</td><td>weapon panel (arrows, mouse)</td></tr>
+          <tr><td>F1–F6</td><td>pick a weapon row (again: next in row)</td></tr>
           <tr><td>Click</td><td>air strike: call it in there</td></tr>
           <tr><td>Tab</td><td>toggle: bomb fuse</td></tr>
           <tr><td>On rope</td><td>← → swing, ↑ ↓ climb, Enter drops bombs, dynamite, mines</td></tr>

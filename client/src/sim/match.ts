@@ -1,6 +1,7 @@
 import { TICK_RATE } from './constants';
 import type { GeneratedMap } from './mapgen';
 import { wormName } from './names';
+import { isUsable, SCHEMES, WEAPON_ORDER, type SchemeId, type WeaponId, type WeaponStatus } from './weapons';
 import { createWorld, type SimEvent, type World, type WorldState } from './world';
 import { NO_INPUT, type Worm, type WormInput } from './worm';
 
@@ -17,6 +18,8 @@ export interface MatchSettings {
   suddenDeathAfter: number;
   /** Pixels the water rises at the end of each turn once sudden death starts. */
   waterRise: number;
+  /** Which weapons each team gets, how many, and from which turn. */
+  scheme: SchemeId;
 }
 
 export const DEFAULT_SETTINGS: MatchSettings = {
@@ -27,6 +30,7 @@ export const DEFAULT_SETTINGS: MatchSettings = {
   retreatTime: 3,
   suddenDeathAfter: 10,
   waterRise: 20,
+  scheme: 'standard',
 };
 
 /**
@@ -56,7 +60,12 @@ export interface MatchState {
   stillTicks: number;
   waterRisen: boolean;
   nextWormIndex: number[];
+  ammo: Ammo[];
+  teamTurns: number[];
 }
+
+/** Shots left per weapon for one team; null is unlimited. */
+type Ammo = Record<WeaponId, number | null>;
 
 /** Everything must stay still this long before the next turn starts. */
 const SETTLE_TICKS = Math.round(0.5 * TICK_RATE);
@@ -83,6 +92,9 @@ export class Match {
   private waterRisen = false;
   /** Per team, which of its worms goes next. */
   private readonly nextWormIndex: number[];
+  /** Per team, shots left of each weapon and how many turns it has started. */
+  private readonly ammo: Ammo[];
+  private readonly teamTurns: number[];
   private events: MatchEvent[] = [];
 
   constructor(
@@ -90,6 +102,19 @@ export class Match {
     readonly settings: MatchSettings,
   ) {
     this.nextWormIndex = settings.teams.map(() => 0);
+    const scheme = SCHEMES[settings.scheme ?? 'standard'].ammo;
+    this.ammo = settings.teams.map(
+      () => Object.fromEntries(WEAPON_ORDER.map((id) => [id, scheme[id].count])) as Ammo,
+    );
+    this.teamTurns = settings.teams.map(() => 0);
+  }
+
+  /** What a team has of a weapon: shots left, and how many of its turns until it's ready. */
+  weaponStatus(team: number, weapon: WeaponId): WeaponStatus {
+    const { delay } = SCHEMES[this.settings.scheme ?? 'standard'].ammo[weapon];
+    // Turns the team had before its current one (or before its next, if it's not its turn).
+    const before = (this.teamTurns[team] ?? 0) - (team === this.turnTeam ? 1 : 0);
+    return { ammo: this.ammo[team]?.[weapon] ?? null, wait: Math.max(0, delay - before) };
   }
 
   /** The worm the player controls right now, if any. */
@@ -106,7 +131,11 @@ export class Match {
   step(input: WormInput): void {
     if (this.phase === 'waiting') return;
     const inControl = this.phase === 'playing' || this.phase === 'retreat';
-    this.world.step(inControl ? input : NO_INPUT, this.phase === 'playing');
+    let control = inControl ? input : NO_INPUT;
+    // Weapons the team has run out of, or can't use yet, can't be picked or fired.
+    if (control.select && !this.usable(control.select)) control = { ...control, select: null };
+    const weapon = control.select ?? this.world.activeWorm?.weapon;
+    this.world.step(control, this.phase === 'playing' && (!weapon || this.usable(weapon)));
     this.elapsedTicks++;
     for (const e of this.world.drainEvents()) this.onWorldEvent(e);
 
@@ -137,6 +166,8 @@ export class Match {
       stillTicks: this.stillTicks,
       waterRisen: this.waterRisen,
       nextWormIndex: [...this.nextWormIndex],
+      ammo: this.ammo.map((a) => ({ ...a })),
+      teamTurns: [...this.teamTurns],
     };
   }
 
@@ -153,6 +184,8 @@ export class Match {
     this.stillTicks = state.stillTicks;
     this.waterRisen = state.waterRisen;
     this.nextWormIndex.splice(0, this.nextWormIndex.length, ...state.nextWormIndex);
+    this.ammo.splice(0, this.ammo.length, ...state.ammo);
+    this.teamTurns.splice(0, this.teamTurns.length, ...state.teamTurns);
   }
 
   /** Returns and clears world and match events since the last call. */
@@ -164,6 +197,10 @@ export class Match {
 
   private onWorldEvent(e: SimEvent): void {
     this.events.push(e);
+    if (e.type === 'weaponUsed') {
+      const left = this.ammo[this.turnTeam]?.[e.weapon];
+      if (left != null) this.ammo[this.turnTeam][e.weapon] = Math.max(0, left - 1);
+    }
     if (e.type === 'weaponUsed' && this.phase === 'playing') {
       this.phase = 'retreat';
       this.ticksLeft = Math.round(this.settings.retreatTime * TICK_RATE);
@@ -176,6 +213,11 @@ export class Match {
   }
 
   /** Teams with a worm that still has health (worms at 0 HP blow up when the turn ends). */
+  /** Whether the team whose turn it is can use this weapon now. */
+  private usable(weapon: WeaponId): boolean {
+    return this.turnTeam >= 0 && isUsable(this.weaponStatus(this.turnTeam, weapon));
+  }
+
   private teamsStanding(): number[] {
     return this.settings.teams
       .map((_, team) => team)
@@ -242,7 +284,10 @@ export class Match {
       const worm = this.nextWormOf(team);
       if (!worm) continue;
       this.turnTeam = team;
+      this.teamTurns[team]++;
       this.world.activeWormId = worm.id;
+      // Holding something this team can't use (yet, or any more): put it away.
+      if (!this.usable(worm.weapon)) worm.weapon = this.usable('bazooka') ? 'bazooka' : 'rope';
       this.world.changeWind();
       this.phase = 'playing';
       this.ticksLeft = this.settings.turnTime > 0 ? Math.round(this.settings.turnTime * TICK_RATE) : Infinity;

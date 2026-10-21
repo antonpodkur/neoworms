@@ -4,7 +4,7 @@ import { generateMap, MAP_PRESETS, mapFromImage, type GeneratedMap } from '../si
 import { createMatch, type Match, type MatchEvent, type MatchSettings } from '../sim/match';
 import { randomSeed } from '../sim/rng';
 import type { Terrain } from '../sim/terrain';
-import { WEAPONS, type WeaponId } from '../sim/weapons';
+import { CATEGORIES, WEAPONS, type WeaponId, type WeaponStatus } from '../sim/weapons';
 import type { World } from '../sim/world';
 import { NO_INPUT, type Worm, type WormInput } from '../sim/worm';
 import {
@@ -26,7 +26,7 @@ import { loadSettings, SetupScreen } from './SetupScreen';
 import { TerrainView } from './TerrainView';
 import { physicsChanges, showMapPicker, toggleTuningPanel, useHostPhysics, useOwnPhysics } from './TuningPanel';
 import { WaterView } from './WaterView';
-import { WeaponPanel } from './WeaponPanel';
+import { WeaponPanel, weaponForKey } from './WeaponPanel';
 import { teamColor, teamColorCss, WormView } from './WormView';
 
 const STEP_MS = DT * 1000;
@@ -162,7 +162,7 @@ export class GameScene extends Phaser.Scene {
     this.water = new WaterView(this, DEPTH.water);
     this.ropeView = new RopeView(this, DEPTH.rope);
     this.projectileView = new ProjectileView(this, DEPTH.projectiles);
-    this.weaponPanel = new WeaponPanel((weapon) => {
+    this.weaponPanel = new WeaponPanel(this.weaponStatus, (weapon) => {
       this.picked = weapon;
       this.followActive = true;
     });
@@ -505,7 +505,7 @@ export class GameScene extends Phaser.Scene {
   private setupInput(): void {
     const kb = this.input.keyboard!;
     this.cursors = kb.createCursorKeys();
-    kb.addCapture('ENTER,BACKSPACE,TAB,SPACE,SHIFT');
+    kb.addCapture('ENTER,BACKSPACE,TAB,SPACE,SHIFT,F1,F2,F3,F4,F5,F6');
     this.setKeyboard(true);
     const onPress = (key: string, action: () => void) =>
       kb.on(`keydown-${key}`, (e: KeyboardEvent) => {
@@ -520,16 +520,21 @@ export class GameScene extends Phaser.Scene {
     onPress('SPACE', () => (panel.isOpen ? panel.choose() : press('fire')()));
     onPress('BACKSPACE', press('backflip'));
     onPress('TAB', press('toggle'));
-    onPress('SHIFT', () => {
-      const worm = this.match.activeWorm;
-      const mine = !this.online || this.isRunningGame();
-      if (panel.isOpen) panel.close();
-      else if (worm && mine && worm.charge === null) panel.open(worm.weapon); // not mid-charge: it'd fire
-    });
+    onPress('SHIFT', () => this.toggleWeaponPanel());
     onPress('ESC', () => (panel.isOpen ? panel.close() : this.openSetup()));
-    for (const [key, step] of [['LEFT', -1], ['UP', -1], ['RIGHT', 1], ['DOWN', 1]] as const) {
-      onPress(key, () => panel.isOpen && panel.move(step));
-    }
+    const arrows = [['LEFT', -1, 0], ['RIGHT', 1, 0], ['UP', 0, -1], ['DOWN', 0, 1]] as const;
+    for (const [key, dx, dy] of arrows) onPress(key, () => panel.isOpen && panel.move(dx, dy));
+    // F1–F6 pick from a row of the panel without opening it; pressing again goes along the row.
+    CATEGORIES.forEach((category, i) =>
+      onPress(category.key, () => {
+        const worm = this.controlledWorm();
+        const weapon = worm && weaponForKey(i, worm.weapon, this.weaponStatus);
+        if (!weapon) return;
+        panel.close();
+        this.picked = weapon;
+        this.followActive = true;
+      }),
+    );
     onPress('H', () => this.hud.toggleHelp());
     onPress('T', toggleTuningPanel);
 
@@ -542,6 +547,10 @@ export class GameScene extends Phaser.Scene {
       if (!worm || !mine || WEAPONS[worm.weapon].use !== 'strike') return;
       this.pickedTarget = Math.round(this.cameras.main.getWorldPoint(p.x, p.y).x);
       this.followActive = true;
+    });
+    // A right click (not a drag, that pans) opens and closes the weapon panel, as in Worms.
+    this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
+      if (p.rightButtonReleased() && p.getDistance() < 6) this.toggleWeaponPanel();
     });
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       const panning = p.rightButtonDown() || p.middleButtonDown() || (p.leftButtonDown() && p.event.altKey);
@@ -564,6 +573,23 @@ export class GameScene extends Phaser.Scene {
       cam.scrollX = anchor.x - cam.width / 2 - (p.x - cam.width / 2) / zoom;
       cam.scrollY = anchor.y - cam.height / 2 - (p.y - cam.height / 2) / zoom;
     });
+  }
+
+  /** What the team whose turn it is has of a weapon. */
+  private readonly weaponStatus = (weapon: WeaponId): WeaponStatus =>
+    this.match.weaponStatus(this.match.turnTeam, weapon);
+
+  /** The worm this player may act with now: their turn, and not mid-charge (it'd fire). */
+  private controlledWorm(): Worm | undefined {
+    const worm = this.match.activeWorm;
+    const mine = !this.online || this.isRunningGame();
+    return worm && mine && worm.charge === null ? worm : undefined;
+  }
+
+  private toggleWeaponPanel(): void {
+    const worm = this.controlledWorm();
+    if (this.weaponPanel.isOpen) this.weaponPanel.close();
+    else if (worm) this.weaponPanel.open(worm.weapon);
   }
 
   private setupCamera(width: number, height: number, headroom: number): void {
@@ -678,7 +704,7 @@ export class GameScene extends Phaser.Scene {
             team: turnTeam,
             teamName: settings.teams[turnTeam],
             wormName: worm.name,
-            weapon: weaponLabel(worm),
+            weapon: weaponLabel(worm, this.match.weaponStatus(turnTeam, worm.weapon)),
             seconds: ticksLeft / TICK_RATE,
             phase,
           }
@@ -695,10 +721,11 @@ export class GameScene extends Phaser.Scene {
   }
 }
 
-function weaponLabel(worm: Worm): string {
+function weaponLabel(worm: Worm, status: WeaponStatus): string {
   const weapon = WEAPONS[worm.weapon];
-  if (weapon.hasFuse) return `${weapon.name} (${worm.fuse} s)`;
-  return weapon.use === 'strike' ? `${weapon.name} (click the map)` : weapon.name;
+  const ammo = status.ammo === null ? '' : ` ×${status.ammo}`;
+  if (weapon.hasFuse) return `${weapon.name}${ammo} (${worm.fuse} s)`;
+  return weapon.use === 'strike' ? `${weapon.name}${ammo} (click the map)` : `${weapon.name}${ammo}`;
 }
 
 function imageKey(map: MapEntry): string {

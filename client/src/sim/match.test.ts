@@ -309,3 +309,52 @@ describe('Worms at 0 HP', () => {
     expect(events).toContainEqual({ type: 'gameOver', winner: 0 });
   });
 });
+
+describe('Ammo and delays', () => {
+  it('limited weapons are used up', () => {
+    const match = setup(1, { turnTime: 30 });
+    const team = match.turnTeam;
+    expect(match.weaponStatus(team, 'mine')).toEqual({ ammo: 3, wait: 0 });
+    run(match, 1, { select: 'mine' });
+    run(match, 1, { fire: true });
+    expect(match.world.projectiles).toMatchObject([{ kind: 'mine' }]);
+    expect(match.weaponStatus(team, 'mine').ammo).toBe(2);
+    expect(match.weaponStatus(team, 'bazooka').ammo).toBeNull(); // unlimited
+  });
+
+  it("can't pick or fire a weapon that's used up", () => {
+    const match = setup(1, { turnTime: 30 });
+    const state = match.snapshot();
+    state.ammo[match.turnTeam].mine = 0;
+    match.restore(state);
+    const worm = match.activeWorm!;
+    run(match, 1, { select: 'mine' });
+    expect(worm.weapon).not.toBe('mine');
+    worm.weapon = 'mine'; // even if it's still in hand
+    run(match, 1, { fire: true });
+    expect(match.world.projectiles).toHaveLength(0);
+    expect(match.phase).toBe('playing');
+  });
+
+  it("delayed weapons unlock once the team has had enough turns", () => {
+    const match = setup(1, { turnTime: 1 });
+    const team = match.turnTeam;
+    expect(match.weaponStatus(team, 'airstrike').wait).toBe(2);
+    run(match, 1, { select: 'airstrike' });
+    expect(match.activeWorm!.weapon).not.toBe('airstrike');
+    untilNextTurn(match);
+    untilNextTurn(match); // the team's second turn
+    expect(match.weaponStatus(team, 'airstrike').wait).toBe(1);
+    untilNextTurn(match);
+    untilNextTurn(match); // third
+    expect(match.weaponStatus(team, 'airstrike').wait).toBe(0);
+    run(match, 1, { select: 'airstrike' });
+    expect(match.activeWorm!.weapon).toBe('airstrike');
+  });
+
+  it('the unlimited set has everything from the first turn', () => {
+    const match = setup(1, { scheme: 'unlimited' });
+    expect(match.weaponStatus(0, 'oldWoman')).toEqual({ ammo: null, wait: 0 });
+    expect(match.weaponStatus(1, 'banana')).toEqual({ ammo: null, wait: 0 });
+  });
+});

@@ -31,7 +31,7 @@ Each milestone ends with something playable.
   - [x] WR impact: thrown worms slide after landing (and fast rope landings), worms at 0 HP blow up at the end of the turn
   - [ ] Tune by feel (speeds, wind strength, grenade bounce, mine sizes, split speeds, air strike angle)
 - [x] **4 · Same-screen match**: setup screen (2–4 teams, worms, turn time, health, sudden death, map), turns with timer, retreat time, settle-before-next-turn, wind per turn, sudden death (rising water), team health bars, win screen with rematch
-  - Later: ammo limits per weapon (schemes)
+  - [x] Worms-style weapon panel (rows by category, F1–F6, right click), ammo and delays per team (Standard / Unlimited)
 - [ ] **5 · Online**: lobby with room codes, team/worm names, host picks map + settings, streaming, disconnect handling
   - [x] Repo split into `client/`, `server/`, `shared/` (npm workspaces)
   - [x] Relay on Cloudflare (PartyServer / Durable Objects): rooms by 4-letter code, host/guest, forwarding

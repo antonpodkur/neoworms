@@ -56,7 +56,8 @@ Other scripts: `npm test` (simulation tests), `npm run typecheck`, `npm run buil
 | Backspace | backflip |
 | Space | fire the selected weapon (hold to charge the bazooka and thrown bombs) |
 | Click the map | call in the air strike there (with the Air Strike selected) |
-| Shift | weapon menu (← → to choose, Space or Enter to pick) |
+| Shift / right click | weapon panel (arrows or mouse to choose, Space, Enter or click to pick) |
+| F1–F6 | pick from a row of the panel without opening it; press again for the next in the row |
 | Tab | toggle: fuse 1–5 s for the grenade, cluster and banana bombs |
 | Space with the rope | shoot the rope / let go / shoot again mid-air |
 | ← → on rope | swing |
@@ -78,6 +79,11 @@ same map and you can share a link to a map you like.
   move and swing on the rope, but not fire again.
 - Getting hurt during your own turn ends it.
 - A worm brought to 0 HP stays until the turn ends, then blows up (which can hurt its neighbours).
+- Weapons (menu option): **Standard** gives each team limited ammo for the big weapons, and some
+  only become available after a few of the team's turns (cluster 3, banana 1 from turn 3,
+  dynamite 2 from turn 2, mines 3, old woman 1 from turn 4, air strike 1 from turn 3, bat 1).
+  **Unlimited** has everything from the start. The panel shows what's left (∞ for unlimited)
+  and how many turns until a weapon is ready.
 - The next turn starts once everything has stopped moving: grenades gone off, worms landed.
 - Wind changes every turn and pushes bazooka shells.
 - Sudden death: after the set time the water rises at the end of every turn.

@@ -66,6 +66,56 @@ export const WEAPONS: Record<WeaponId, WeaponSpec> = {
 
 export const WEAPON_ORDER = Object.keys(WEAPONS) as WeaponId[];
 
+/** The weapon panel's rows, as in Worms: each has a function key that picks along its row. */
+export const CATEGORIES: { name: string; key: string; weapons: WeaponId[] }[] = [
+  { name: 'Artillery', key: 'F1', weapons: ['bazooka'] },
+  { name: 'Grenades', key: 'F2', weapons: ['grenade', 'cluster', 'banana'] },
+  { name: 'Explosives', key: 'F3', weapons: ['dynamite', 'mine', 'oldWoman'] },
+  { name: 'Air', key: 'F4', weapons: ['airstrike'] },
+  { name: 'Close combat', key: 'F5', weapons: ['bat', 'prod'] },
+  { name: 'Tools', key: 'F6', weapons: ['rope'] },
+];
+
+/**
+ * How many of a weapon each team starts with (null: unlimited), and how many of the team's
+ * own turns go by before it can be used (Worms' "delay").
+ */
+export interface Ammo {
+  count: number | null;
+  delay: number;
+}
+
+export type SchemeId = 'standard' | 'unlimited';
+
+const unlimited = (): Record<WeaponId, Ammo> =>
+  Object.fromEntries(WEAPON_ORDER.map((id) => [id, { count: null, delay: 0 }])) as Record<WeaponId, Ammo>;
+
+/** Weapon sets for a match. Standard keeps the big ones scarce and late, like Worms' defaults. */
+export const SCHEMES: Record<SchemeId, { name: string; ammo: Record<WeaponId, Ammo> }> = {
+  standard: {
+    name: 'Standard',
+    ammo: {
+      ...unlimited(),
+      cluster: { count: 3, delay: 0 },
+      banana: { count: 1, delay: 2 },
+      dynamite: { count: 2, delay: 1 },
+      mine: { count: 3, delay: 0 },
+      oldWoman: { count: 1, delay: 3 },
+      airstrike: { count: 1, delay: 2 },
+      bat: { count: 1, delay: 0 },
+    },
+  },
+  unlimited: { name: 'Unlimited', ammo: unlimited() },
+};
+
+/** A weapon's state for one team: shots left (null: unlimited) and turns until it's ready. */
+export interface WeaponStatus {
+  ammo: number | null;
+  wait: number;
+}
+
+export const isUsable = (s: WeaponStatus): boolean => s.wait === 0 && s.ammo !== 0;
+
 /** Grenade fuse choices in seconds. */
 export const FUSES = [1, 2, 3, 4, 5];
 
@@ -158,7 +208,7 @@ export interface WeaponContext {
   /** Height of the first ground from the top in column x (the water if there is none). */
   surfaceY(x: number): number;
   /** A weapon (not the rope) went off: the match starts retreat time. */
-  weaponUsed(): void;
+  weaponUsed(weapon: WeaponId): void;
 }
 
 /**
@@ -224,20 +274,20 @@ function charge(worm: Worm, input: WormInput, ctx: WeaponContext): void {
     vy: dirY * speed,
     fuse: worm.fuse,
   });
-  ctx.weaponUsed();
+  ctx.weaponUsed(worm.weapon);
 }
 
 /** Mines, dynamite and the old woman are set down just in front of the worm. */
 function place(worm: Worm, kind: ProjectileKind, ctx: WeaponContext): void {
   ctx.spawn({ kind, x: worm.x + worm.facing * (PHYS.wormRadius + 5), y: worm.y, vx: worm.facing * 30, vy: -50 });
-  ctx.weaponUsed();
+  ctx.weaponUsed(worm.weapon);
 }
 
 function swing(worm: Worm, melee: Melee, ctx: WeaponContext): void {
   const dirX = melee.aimed ? Math.cos(worm.aim) * worm.facing : worm.facing;
   const dirY = melee.aimed ? -Math.sin(worm.aim) : 0;
   ctx.hit(worm, dirX, dirY, melee);
-  ctx.weaponUsed();
+  ctx.weaponUsed(worm.weapon);
 }
 
 /**
@@ -253,7 +303,7 @@ function callStrike(worm: Worm, targetX: number, ctx: WeaponContext): void {
     const lead = (vx * (ctx.surfaceY(x) - startY)) / vy;
     ctx.spawn({ kind: 'missile', x: x - worm.facing * lead, y: startY, vx: worm.facing * vx, vy });
   }
-  ctx.weaponUsed();
+  ctx.weaponUsed(worm.weapon);
 }
 
 /** Lets go of a droppable weapon below the worm; it keeps the worm's speed. */
@@ -266,5 +316,5 @@ function drop(worm: Worm, ctx: WeaponContext): void {
     vy: worm.vy,
     fuse: worm.fuse,
   });
-  ctx.weaponUsed();
+  ctx.weaponUsed(worm.weapon);
 }
