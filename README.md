@@ -1,7 +1,7 @@
 # NeoWorms
 
-A Worms-style artillery game for the browser. Currently a single-player sandbox with the ninja rope and weapons
-(milestone 3, no turns yet);
+A Worms-style artillery game for the browser. Currently a hot-seat game: 2–4 teams take turns on
+one computer (milestone 4);
 see [ROADMAP.md](ROADMAP.md) for where it's headed.
 
 ## Run it
@@ -11,7 +11,8 @@ npm install
 npm run dev
 ```
 
-Then open the URL Vite prints (usually http://localhost:5173).
+Then open the URL Vite prints (usually http://localhost:5173). The setup screen picks teams,
+worms per team, turn time, worm health, when sudden death starts, and the map.
 
 Other scripts: `npm test` (simulation tests), `npm run typecheck`, `npm run build`.
 
@@ -31,16 +32,25 @@ Other scripts: `npm test` (simulation tests), `npm run typecheck`, `npm run buil
 | ← → on rope | swing |
 | ↑ ↓ on rope | climb / descend |
 | Enter on rope | drop the selected grenade or mine |
-| N | next worm |
 | Mouse wheel | zoom |
 | Right drag / Alt + drag | pan |
-| R | respawn worms (new seed; generated maps get new terrain) |
-| M | next map (Rope Gym is made for rope practice) |
+| Esc | menu: pause, resume, new match |
 | T | show/hide the map picker and tuning sliders |
 | H | show/hide help |
 
 The map and seed are kept in the URL (e.g. `?map=rope-gym&seed=1234`), so a reload keeps the
 same map and you can share a link to a map you like.
+
+## Match rules
+
+- Teams take turns; each team cycles through its worms. A turn lasts the turn time.
+- Using a weapon (not the ninja rope) leaves 3 seconds of retreat time to get away; you can still
+  move and swing on the rope, but not fire again.
+- Getting hurt during your own turn ends it.
+- The next turn starts once everything has stopped moving: grenades gone off, worms landed.
+- Wind changes every turn and pushes bazooka shells.
+- Sudden death: after the set time the water rises at the end of every turn.
+- The last team with worms standing wins.
 
 ## Maps
 

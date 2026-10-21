@@ -17,6 +17,7 @@ let onPickMap: (id: string) => void = () => {};
 export function createTuningPanel(): void {
   loadSaved();
   gui = new GUI({ title: 'Tuning  (T to hide)' });
+  gui.close(); // collapsed to its title bar until needed
   mapFolder = gui.addFolder('Map'); // filled in by showMapPicker once the game knows its maps
 
   const rope = gui.addFolder('Ninja rope');

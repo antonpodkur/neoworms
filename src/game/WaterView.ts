@@ -4,23 +4,20 @@ import Phaser from 'phaser';
 export class WaterView {
   private readonly gfx: Phaser.GameObjects.Graphics;
 
-  constructor(
-    scene: Phaser.Scene,
-    private readonly level: number,
-    depth: number,
-  ) {
+  constructor(scene: Phaser.Scene, depth: number) {
     this.gfx = scene.add.graphics().setDepth(depth);
   }
 
-  update(cam: Phaser.Cameras.Scene2D.Camera, time: number): void {
+  /** `level` can change during a match (sudden death raises it). */
+  update(cam: Phaser.Cameras.Scene2D.Camera, time: number, level: number): void {
     const view = cam.worldView;
     const left = view.x - 32;
     const right = view.right + 32;
-    const bottom = Math.max(view.bottom, this.level) + 32;
+    const bottom = Math.max(view.bottom, level) + 32;
     const t = time / 1000;
     const surface: Phaser.Math.Vector2[] = [];
     for (let x = left - (left % 16); x <= right + 16; x += 16) {
-      const y = this.level + Math.sin(x * 0.02 + t * 2) * 3 + Math.sin(x * 0.051 - t * 1.3) * 2;
+      const y = level + Math.sin(x * 0.02 + t * 2) * 3 + Math.sin(x * 0.051 - t * 1.3) * 2;
       surface.push(new Phaser.Math.Vector2(x, y));
     }
 
@@ -32,7 +29,7 @@ export class WaterView {
     );
     // Deep water is opaque so the submerged bottom of the map never shows.
     g.fillStyle(0x174a80, 1);
-    g.fillRect(left, this.level + 36, right - left + 16, bottom - this.level);
+    g.fillRect(left, level + 36, right - left + 16, bottom - level);
     g.lineStyle(2, 0x9ad8ff, 0.9);
     g.strokePoints(surface);
   }

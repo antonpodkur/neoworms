@@ -1,22 +1,24 @@
 import Phaser from 'phaser';
-import { DT } from '../sim/constants';
+import { DT, TICK_RATE } from '../sim/constants';
 import { generateMap, MAP_PRESETS, mapFromImage, type GeneratedMap } from '../sim/mapgen';
+import { createMatch, type Match, type MatchEvent, type MatchSettings } from '../sim/match';
 import { randomSeed } from '../sim/rng';
 import type { Terrain } from '../sim/terrain';
-import { createMatch, type SimEvent, type TeamSetup, type World } from '../sim/world';
 import { WEAPONS, type WeaponId } from '../sim/weapons';
-import { NO_INPUT, type WormInput } from '../sim/worm';
+import type { World } from '../sim/world';
+import { NO_INPUT, type Worm, type WormInput } from '../sim/worm';
 import { DEPTH } from './depth';
 import { explosionFlash, floatingText, splash } from './effects';
 import { Hud } from './Hud';
 import { findMap, imageScale, MAPS, type MapEntry } from './maps';
 import { ProjectileView } from './ProjectileView';
 import { RopeView } from './RopeView';
+import { loadSettings, SetupScreen } from './SetupScreen';
 import { TerrainView } from './TerrainView';
 import { showMapPicker, toggleTuningPanel } from './TuningPanel';
 import { WaterView } from './WaterView';
 import { WeaponPanel } from './WeaponPanel';
-import { teamColor, WormView } from './WormView';
+import { teamColor, teamColorCss, WormView } from './WormView';
 
 const STEP_MS = DT * 1000;
 const MIN_ZOOM = 0.35;
@@ -33,32 +35,35 @@ const BACKDROPS = {
   cave: ['#140e0b', '#2b1e17', '#46332a'],
 };
 
-const SANDBOX_TEAMS: TeamSetup[] = [
-  { name: 'Red', worms: ['Noodle', 'Pickle', 'Sir Squirm'] },
-  { name: 'Blue', worms: ['Wiggles', 'Gus', 'Dirt Dan'] },
-];
-
 interface SceneData {
   mapId?: string;
   seed?: number;
+  settings?: MatchSettings;
+  /** Start playing right away instead of showing the setup screen. */
+  autostart?: boolean;
 }
 
 /**
- * Sandbox: one map, a few worms, the ninja rope and weapons, no turns yet.
- * The simulation (World) runs at a fixed tick; this scene only feeds it input and draws it.
+ * A hot-seat match: the Match (rules) and World (physics) run at a fixed tick; this scene
+ * feeds them the keyboard and draws them. Before the first turn, and on Esc, the setup
+ * screen is shown over the paused game.
  * The map and seed live in the URL (?map=rope-gym&seed=42), so a reload keeps the same map.
  * Image maps load in preload(); generated ones are built in create().
  */
 export class GameScene extends Phaser.Scene {
-  world!: World;
+  match!: Match;
+  private world!: World;
   private map!: MapEntry;
   private seed = 0;
+  private settings!: MatchSettings;
+  private autostart = false;
   private terrainView!: TerrainView;
   private water!: WaterView;
   private wormViews = new Map<number, WormView>();
   private ropeView!: RopeView;
   private projectileView!: ProjectileView;
   private weaponPanel!: WeaponPanel;
+  private setup!: SetupScreen;
   private aimGfx!: Phaser.GameObjects.Graphics;
   private hud!: Hud;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -74,12 +79,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   init(data: SceneData): void {
-    // On first load the URL picks the map; after that, R, M and the map picker do.
+    // On first load the URL picks the map; after that the setup screen and map picker do.
     const url = new URLSearchParams(location.search);
     const urlSeed = Number(url.get('seed'));
     const firstLoad = !data.mapId;
     this.map = findMap(data.mapId ?? url.get('map')) ?? MAPS[0];
     this.seed = data.seed ?? (firstLoad && urlSeed > 0 ? urlSeed : randomSeed());
+    this.settings = data.settings ?? loadSettings();
+    this.autostart = data.autostart ?? false;
     this.wormViews = new Map();
     this.pressed = { jump: false, backflip: false, fire: false, toggle: false };
     this.picked = null;
@@ -93,16 +100,18 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.world = createMatch(this.buildMap(), this.seed, SANDBOX_TEAMS);
-    const { terrain, waterLevel } = this.world;
+    this.match = createMatch(this.buildMap(), this.seed, this.settings);
+    this.world = this.match.world;
+    const { terrain } = this.world;
     history.replaceState(null, '', `?${new URLSearchParams({ map: this.map.id, seed: String(this.seed) })}`);
-    showMapPicker(MAPS, this.map.id, (mapId) => this.scene.restart({ mapId }));
+    showMapPicker(MAPS, this.map.id, (mapId) => this.newMatch(this.settings, mapId));
+
     const enclosed = isEnclosed(this.map, terrain);
     const headroom = enclosed ? 0 : SKY_HEADROOM;
     this.addBackdrop(enclosed ? 'cave' : 'sky', terrain.width, terrain.height, headroom);
     this.terrainView = new TerrainView(this, terrain, DEPTH.terrain);
     for (const worm of this.world.worms) this.wormViews.set(worm.id, new WormView(this, worm));
-    this.water = new WaterView(this, waterLevel, DEPTH.water);
+    this.water = new WaterView(this, DEPTH.water);
     this.ropeView = new RopeView(this, DEPTH.rope);
     this.projectileView = new ProjectileView(this, DEPTH.projectiles);
     this.weaponPanel = new WeaponPanel((weapon) => {
@@ -111,18 +120,27 @@ export class GameScene extends Phaser.Scene {
     });
     this.aimGfx = this.add.graphics().setDepth(DEPTH.labels);
     this.hud = new Hud();
+    this.hud.hideGameOver();
+    this.setup = new SetupScreen(
+      MAPS,
+      (settings, mapId) => this.newMatch(settings, mapId),
+      () => this.setKeyboard(true),
+    );
     this.setupCamera(terrain.width, terrain.height, headroom);
     this.setupInput();
+
+    if (this.autostart) this.match.start();
+    else this.openSetup();
   }
 
   update(time: number, delta: number): void {
     // Cap the catch-up after a stall (e.g. a background tab) instead of fast-forwarding.
     this.accumulator += Math.min(delta, 250);
     while (this.accumulator >= STEP_MS) {
-      this.world.step(this.readInput());
+      if (!this.setup.isOpen) this.match.step(this.readInput());
       this.accumulator -= STEP_MS;
     }
-    this.handleEvents(this.world.drainEvents());
+    this.handleEvents(this.match.drainEvents());
 
     const alpha = this.accumulator / STEP_MS;
     for (const worm of this.world.worms) {
@@ -131,10 +149,33 @@ export class GameScene extends Phaser.Scene {
     this.terrainView.flush();
     this.ropeView.update(this.world.worms, this.wormViews);
     this.projectileView.update(this.world.projectiles, alpha, time);
-    this.water.update(this.cameras.main, time);
+    this.water.update(this.cameras.main, time, this.world.waterLevel);
     this.drawAim(time);
     this.updateCamera(delta);
     this.updateHud();
+  }
+
+  /** Starts a fresh match (new seed) with these settings on this map. */
+  private newMatch(settings: MatchSettings, mapId: string): void {
+    this.scene.restart({ mapId, settings, autostart: true } satisfies SceneData);
+  }
+
+  private openSetup(): void {
+    this.weaponPanel.close();
+    this.setKeyboard(false);
+    const inProgress = this.match.phase !== 'waiting' && this.match.phase !== 'over';
+    this.setup.open(this.settings, this.map.id, inProgress);
+  }
+
+  /** The game ignores the keyboard while the setup screen is up, so team names can be typed. */
+  private setKeyboard(enabled: boolean): void {
+    const kb = this.input.keyboard!;
+    kb.enabled = enabled;
+    if (enabled) kb.enableGlobalCapture();
+    else {
+      kb.disableGlobalCapture();
+      kb.resetKeys();
+    }
   }
 
   private buildMap(): GeneratedMap {
@@ -169,7 +210,7 @@ export class GameScene extends Phaser.Scene {
     return input;
   }
 
-  private handleEvents(events: SimEvent[]): void {
+  private handleEvents(events: MatchEvent[]): void {
     for (const e of events) {
       switch (e.type) {
         case 'carve':
@@ -186,6 +227,7 @@ export class GameScene extends Phaser.Scene {
         case 'death': {
           const worm = this.world.worms[e.wormId];
           if (e.cause === 'drowned') splash(this, worm.x, this.world.waterLevel);
+          this.wormViews.get(e.wormId)?.update(worm, 1); // show its final health while it fades
           this.wormViews.get(e.wormId)?.die(e.cause);
           this.wormViews.delete(e.wormId);
           break;
@@ -196,8 +238,36 @@ export class GameScene extends Phaser.Scene {
         case 'dud':
           floatingText(this, e.x, e.y - 10, 'dud', 0xcccccc);
           break;
+        case 'turnStart': {
+          this.weaponPanel.close();
+          this.pressed = { jump: false, backflip: false, fire: false, toggle: false };
+          this.followActive = true;
+          const turn = `${this.settings.teams[e.team]}'s turn`;
+          // Sudden death starts in the same tick as the next turn; announce both together.
+          if (events.some((x) => x.type === 'suddenDeath')) {
+            this.hud.showBanner(`Sudden death! The water is rising\n${turn}`, '#ff6b6b', 3000);
+          } else {
+            this.hud.showBanner(turn, teamColorCss(e.team));
+          }
+          break;
+        }
+        case 'suddenDeath':
+          break; // announced with the turn that follows
+        case 'gameOver':
+          this.weaponPanel.close();
+          this.hud.showGameOver(
+            e.winner === null ? 'Draw!' : `${this.settings.teams[e.winner]} wins!`,
+            e.winner === null ? '#ffffff' : teamColorCss(e.winner),
+            () => this.newMatch(this.settings, this.map.id),
+            () => {
+              this.hud.hideGameOver();
+              this.openSetup();
+            },
+          );
+          break;
         case 'mineTriggered':
-          break; // the mine's light starts blinking fast
+        case 'weaponUsed':
+          break;
       }
     }
   }
@@ -206,6 +276,7 @@ export class GameScene extends Phaser.Scene {
     const kb = this.input.keyboard!;
     this.cursors = kb.createCursorKeys();
     kb.addCapture('ENTER,BACKSPACE,TAB,SPACE,SHIFT');
+    this.setKeyboard(true);
     const onPress = (key: string, action: () => void) =>
       kb.on(`keydown-${key}`, (e: KeyboardEvent) => {
         if (!e.repeat) action();
@@ -220,20 +291,14 @@ export class GameScene extends Phaser.Scene {
     onPress('BACKSPACE', press('backflip'));
     onPress('TAB', press('toggle'));
     onPress('SHIFT', () => {
-      const worm = this.world.activeWorm;
+      const worm = this.match.activeWorm;
       if (panel.isOpen) panel.close();
       else if (worm && worm.charge === null) panel.open(worm.weapon); // not mid-charge: it'd fire
     });
-    onPress('ESC', () => panel.close());
+    onPress('ESC', () => (panel.isOpen ? panel.close() : this.openSetup()));
     for (const [key, step] of [['LEFT', -1], ['UP', -1], ['RIGHT', 1], ['DOWN', 1]] as const) {
       onPress(key, () => panel.isOpen && panel.move(step));
     }
-    onPress('N', () => {
-      this.world.selectNextWorm();
-      this.followActive = true;
-    });
-    onPress('R', () => this.scene.restart({ mapId: this.map.id }));
-    onPress('M', () => this.scene.restart({ mapId: nextMap(this.map).id }));
     onPress('H', () => this.hud.toggleHelp());
     onPress('T', toggleTuningPanel);
 
@@ -264,23 +329,26 @@ export class GameScene extends Phaser.Scene {
   private setupCamera(width: number, height: number, headroom: number): void {
     const cam = this.cameras.main;
     cam.setBounds(-CAMERA_MARGIN, -headroom, width + CAMERA_MARGIN * 2, height + headroom);
-    const worm = this.world.activeWorm;
-    if (worm) cam.centerOn(worm.x, worm.y);
+    const first = this.world.worms[0];
+    if (first) cam.centerOn(first.x, first.y);
   }
 
+  /** Like Worms: watch whatever is flying, otherwise the worm whose turn it is (or was). */
   private updateCamera(delta: number): void {
-    const view = this.followActive ? this.wormViews.get(this.world.activeWormId) : undefined;
-    if (!view || !this.world.activeWorm) return;
+    if (!this.followActive) return;
+    const flying = this.world.projectiles.findLast((p) => p.kind !== 'mine' && !p.resting);
+    const target = flying ?? this.wormViews.get(this.world.activeWormId);
+    if (!target) return;
     const cam = this.cameras.main;
     const k = 1 - Math.exp(-delta / 150);
-    cam.scrollX += (view.x - cam.width / 2 - cam.scrollX) * k;
-    cam.scrollY += (view.y - cam.height / 2 - cam.scrollY) * k;
+    cam.scrollX += (target.x - cam.width / 2 - cam.scrollX) * k;
+    cam.scrollY += (target.y - cam.height / 2 - cam.scrollY) * k;
   }
 
   /** Crosshair, power bar while charging, and a bobbing marker over the active worm. */
   private drawAim(time: number): void {
     const g = this.aimGfx.clear();
-    const worm = this.world.activeWorm;
+    const worm = this.match.activeWorm;
     const view = worm && this.wormViews.get(worm.id);
     if (!worm || !view) return;
 
@@ -341,25 +409,36 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateHud(): void {
-    const worm = this.world.activeWorm;
-    const mapName = this.map.name;
-    const teamTotals = SANDBOX_TEAMS.map((team, i) => {
-      const hp = this.world.worms.filter((w) => w.team === i && w.alive).reduce((sum, w) => sum + w.hp, 0);
-      return `${team.name} ${hp}`;
-    });
-    const weapon = worm && WEAPONS[worm.weapon];
-    this.hud.setInfo([
-      `${mapName} · seed ${this.seed}`,
-      worm ? `▶ ${worm.name} (${SANDBOX_TEAMS[worm.team].name}) ${worm.hp} HP` : 'No worms left — press R',
-      weapon ? `${weapon.name}${weapon.hasFuse ? ` · fuse ${worm.fuse} s (Tab)` : ''} · Shift: weapons` : '',
-      teamTotals.join('   '),
-    ]);
+    const { phase, turnTeam, ticksLeft, settings } = this.match;
+    this.hud.setInfo([`${this.map.name} · seed ${this.seed}`, 'H: help · Esc: menu']);
+    const worm = this.world.worms[this.world.activeWormId];
+    const showTurn = phase === 'playing' || phase === 'retreat' || phase === 'settling';
+    this.hud.setTurn(
+      showTurn && worm
+        ? {
+            team: turnTeam,
+            teamName: settings.teams[turnTeam],
+            wormName: worm.name,
+            weapon: weaponLabel(worm),
+            seconds: ticksLeft / TICK_RATE,
+            phase,
+          }
+        : null,
+    );
+    this.hud.setTeams(
+      settings.teams.map((name, team) => ({
+        name,
+        hp: this.world.worms.filter((w) => w.team === team && w.alive).reduce((sum, w) => sum + w.hp, 0),
+        maxHp: settings.wormsPerTeam * settings.wormHp,
+      })),
+    );
     this.hud.setWind(this.world.wind);
   }
 }
 
-function nextMap(current: MapEntry): MapEntry {
-  return MAPS[(MAPS.indexOf(current) + 1) % MAPS.length];
+function weaponLabel(worm: Worm): string {
+  const weapon = WEAPONS[worm.weapon];
+  return weapon.hasFuse ? `${weapon.name} (${worm.fuse} s)` : weapon.name;
 }
 
 function imageKey(map: MapEntry): string {

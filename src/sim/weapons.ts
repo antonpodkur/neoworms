@@ -51,15 +51,16 @@ export const BLASTS = {
 /** What weapon handling needs from the world. */
 export interface WeaponContext {
   spawn(launch: Launch): void;
-  /** Picks new wind; for now it changes after every shot (later: every turn). */
-  changeWind(): void;
+  /** A weapon (not the rope) went off: the match starts retreat time. */
+  weaponUsed(): void;
 }
 
 /**
  * The active worm's weapon controls: pick a weapon, Tab to cycle the fuse, Space to fire
  * (hold to charge), and Enter to drop the selected weapon while on the rope.
+ * With `canFire` false (retreat time) only the rope still works.
  */
-export function useWeapons(worm: Worm, input: WormInput, ctx: WeaponContext): void {
+export function useWeapons(worm: Worm, input: WormInput, ctx: WeaponContext, canFire = true): void {
   if (input.select) {
     worm.weapon = input.select;
     worm.charge = null;
@@ -70,18 +71,18 @@ export function useWeapons(worm: Worm, input: WormInput, ctx: WeaponContext): vo
 
   // On the rope (or flying after letting go), Enter drops a weapon instead of jumping.
   const roping = worm.rope?.phase === 'attached' || worm.ropeChain;
-  if (input.jump && roping && WEAPONS[worm.weapon].droppable) drop(worm, ctx);
+  if (canFire && input.jump && roping && WEAPONS[worm.weapon].droppable) drop(worm, ctx);
 
   if (worm.charge !== null) charge(worm, input, ctx);
-  else if (input.fire) pressFire(worm, ctx);
+  else if (input.fire) pressFire(worm, ctx, canFire);
 }
 
-function pressFire(worm: Worm, ctx: WeaponContext): void {
+function pressFire(worm: Worm, ctx: WeaponContext, canFire: boolean): void {
   if (worm.rope?.phase === 'attached') return releaseRope(worm);
   if (worm.rope) return; // hook still flying
   // After letting go of the rope, Space shoots it again whatever is selected.
   if (worm.weapon === 'rope' || worm.ropeChain) return shootRope(worm);
-  if (!worm.grounded) return; // other weapons need solid ground
+  if (!canFire || !worm.grounded) return; // other weapons need solid ground
   if (WEAPONS[worm.weapon].charged) worm.charge = 0;
   else if (worm.weapon === 'mine') placeMine(worm, ctx);
 }
@@ -110,13 +111,13 @@ function charge(worm: Worm, input: WormInput, ctx: WeaponContext): void {
     vy: dirY * speed,
     fuse: worm.fuse,
   });
-  ctx.changeWind();
+  ctx.weaponUsed();
 }
 
 /** Mines are set down just in front of the worm. */
 function placeMine(worm: Worm, ctx: WeaponContext): void {
   ctx.spawn({ kind: 'mine', x: worm.x + worm.facing * (PHYS.wormRadius + 5), y: worm.y, vx: worm.facing * 30, vy: -50 });
-  ctx.changeWind();
+  ctx.weaponUsed();
 }
 
 /** Lets go of a grenade or mine below the worm; it keeps the worm's speed. */
@@ -129,5 +130,5 @@ function drop(worm: Worm, ctx: WeaponContext): void {
     vy: worm.vy,
     fuse: worm.fuse,
   });
-  ctx.changeWind();
+  ctx.weaponUsed();
 }

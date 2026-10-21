@@ -27,7 +27,8 @@ Each milestone ends with something playable.
 - [ ] **3 · Weapons**: aim + hold to charge, weapon menu; bazooka (wind), grenade (1–5 s fuse, bounces), mines (proximity, arming delay, duds); chain reactions. Use the WR explosion table (separate crater, damage reach, push reach).
   - [x] Shift weapon menu, Space hold-to-charge, Tab fuse toggle, wind; bazooka, grenade, mines (map mines, arming, duds, chain reactions); Enter drops grenades/mines from the rope
   - [ ] Tune by feel (speeds, wind strength, grenade bounce, mine sizes); grenades don't bounce off worms yet
-- [ ] **4 · Same-screen match**: teams, turn timer, retreat time, wind, sudden death (rising water), win screen
+- [x] **4 · Same-screen match**: setup screen (2–4 teams, worms, turn time, health, sudden death, map), turns with timer, retreat time, settle-before-next-turn, wind per turn, sudden death (rising water), team health bars, win screen with rematch
+  - Later: ammo limits per weapon (schemes), worms exploding at 0 HP at the end of a turn (WR "WormDeathBlast")
 - [ ] **5 · Online**: lobby with room codes, team/worm names, host picks map + settings, streaming, disconnect handling
 - [ ] **6 · Maps & content**: themes, import a map from an image, more weapons, crates, barrels
 - [ ] **7 · Polish**: sprites, animations, sound, particles, gamepad

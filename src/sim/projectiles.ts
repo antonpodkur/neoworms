@@ -13,6 +13,8 @@ export const PROJECTILE_RADIUS: Record<ProjectileKind, number> = { shell: 2, gre
 const CHAIN_FUSE = 0.3;
 /** Grenades and mines slower than this when touching the floor come to rest. */
 const SETTLE_SPEED = 20;
+/** Moving less than this (px) in a tick while touching ground counts as stuck. */
+const STUCK_DISTANCE = 0.1;
 
 export interface Projectile {
   id: number;
@@ -136,7 +138,10 @@ function roll(p: Projectile, ctx: ProjectileContext): void {
   const n = moveDisc(p, r, ctx.terrain);
   if (!n) return;
   bounceOff(p, n, p.kind === 'mine' ? 0.2 : PHYS.grenadeBounce, PHYS.grenadeFriction);
-  if (n.y < -0.5 && Math.hypot(p.vx, p.vy) < SETTLE_SPEED) {
+  // At rest once it's slow on a floor, or wedged where it can't go anywhere (on steep pixel
+  // slopes the bounce can leave some speed that never turns into movement).
+  const moved = Math.hypot(p.x - p.prevX, p.y - p.prevY);
+  if ((n.y < -0.5 && Math.hypot(p.vx, p.vy) < SETTLE_SPEED) || moved < STUCK_DISTANCE) {
     p.vx = 0;
     p.vy = 0;
     p.resting = true;

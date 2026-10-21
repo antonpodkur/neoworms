@@ -210,7 +210,8 @@ function collide(worm: Worm, n: Vec2): number {
   if (worm.knocked) bounceOff(worm, n, PHYS.knockBounce, PHYS.knockFriction);
   else bounceOff(worm, n, PHYS.wallBounce);
   // Wedged in a crevice or barely moving: settle so the player can walk or jump out.
-  if (n.y < 0 && Math.hypot(worm.vx, worm.vy) < PHYS.settleSpeed) land(worm);
+  const moved = Math.hypot(worm.x - worm.prevX, worm.y - worm.prevY);
+  if ((n.y < 0 && Math.hypot(worm.vx, worm.vy) < PHYS.settleSpeed) || moved < 0.1) land(worm);
   return 0;
 }
 

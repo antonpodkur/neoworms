@@ -94,7 +94,11 @@
         border-radius: 10px;
         background: rgba(10, 20, 40, 0.85);
       }
-      #weapon-panel[hidden] {
+      #hud-help[hidden],
+      #weapon-panel[hidden],
+      #setup[hidden],
+      #gameover[hidden],
+      #turn[hidden] {
         display: none;
       }
       #weapon-panel .weapon {
@@ -119,13 +123,209 @@
         border-color: #ffd23f;
         background: rgba(255, 210, 63, 0.18);
       }
+      button {
+        font: 600 14px system-ui, sans-serif;
+        color: #fff;
+        background: rgba(255, 255, 255, 0.12);
+        border: 0;
+        border-radius: 8px;
+        padding: 8px 14px;
+        cursor: pointer;
+      }
+      button:hover:not(:disabled) {
+        background: rgba(255, 255, 255, 0.22);
+      }
+      button:disabled {
+        opacity: 0.35;
+        cursor: default;
+      }
+      button.start,
+      button.rematch {
+        background: #ffd23f;
+        color: #1a1a1a;
+      }
+      #setup,
+      #gameover {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: rgba(5, 10, 20, 0.55);
+        color: #fff;
+      }
+      #setup .card,
+      #gameover {
+        font: 14px/1.4 system-ui, sans-serif;
+      }
+      #setup .card {
+        width: min(440px, calc(100vw - 32px));
+        padding: 24px;
+        border-radius: 14px;
+        background: rgba(12, 22, 44, 0.96);
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      }
+      #setup h1 {
+        margin: 0 0 16px;
+        font-size: 28px;
+      }
+      #setup .team {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+      }
+      #setup .swatch {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        flex: none;
+      }
+      #setup input,
+      #setup select {
+        font: 14px system-ui, sans-serif;
+        color: #fff;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 6px;
+        padding: 6px 8px;
+      }
+      #setup input {
+        flex: 1;
+      }
+      #setup .remove {
+        padding: 6px 10px;
+      }
+      #setup .options {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin: 18px 0;
+      }
+      #setup .options label {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 12px;
+        color: #c8d4e6;
+      }
+      #setup .actions,
+      #gameover .actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+      }
+      #gameover h2 {
+        margin: 0 0 18px;
+        font-size: 48px;
+        text-align: center;
+        text-shadow: 0 3px 0 #000;
+      }
+      #gameover .actions {
+        justify-content: center;
+      }
+      #turn {
+        position: fixed;
+        left: 12px;
+        bottom: 14px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 14px;
+        border-radius: 10px;
+        background: rgba(10, 20, 40, 0.8);
+        color: #fff;
+        pointer-events: none;
+      }
+      #turn .dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+      }
+      #turn .who {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.2;
+      }
+      #turn small {
+        color: #c8d4e6;
+      }
+      #turn .timer {
+        min-width: 44px;
+        text-align: right;
+        font: 800 30px system-ui, sans-serif;
+      }
+      #turn .timer.retreat {
+        color: #ffd23f;
+      }
+      #turn .timer.settling {
+        color: #8b97a8;
+      }
+      #teams {
+        position: fixed;
+        bottom: 56px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        padding: 6px 12px;
+        border-radius: 8px;
+        background: rgba(10, 20, 40, 0.72);
+        color: #fff;
+        font-weight: 600;
+        pointer-events: none;
+      }
+      #teams .team {
+        display: grid;
+        grid-template-columns: 90px 160px 36px;
+        align-items: center;
+        gap: 8px;
+      }
+      #teams .team.out {
+        opacity: 0.4;
+      }
+      #teams .name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #teams .bar {
+        height: 8px;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.15);
+        overflow: hidden;
+      }
+      #teams .bar span {
+        display: block;
+        height: 100%;
+        transition: width 0.4s;
+      }
+      #teams .hp {
+        text-align: right;
+      }
+      #banner {
+        position: fixed;
+        top: 18%;
+        left: 0;
+        right: 0;
+        text-align: center;
+        font: 800 40px system-ui, sans-serif;
+        text-shadow: 0 3px 0 #000, 0 0 18px rgba(0, 0, 0, 0.6);
+        white-space: pre-line;
+        opacity: 0;
+        transition: opacity 0.4s;
+        pointer-events: none;
+      }
+      #banner.visible {
+        opacity: 1;
+      }
     </style>
   </head>
   <body>
     <div id="game"></div>
     <div id="hud">
       <div id="hud-info"></div>
-      <div id="hud-help">
+      <div id="hud-help" hidden>
         <table>
           <tr><td>← →</td><td>walk</td></tr>
           <tr><td>↑ ↓</td><td>aim</td></tr>
@@ -136,17 +336,21 @@
           <tr><td>Shift</td><td>weapon menu</td></tr>
           <tr><td>Tab</td><td>toggle: grenade fuse</td></tr>
           <tr><td>On rope</td><td>← → swing, ↑ ↓ climb, Enter drops grenade/mine</td></tr>
-          <tr><td>N</td><td>next worm</td></tr>
           <tr><td>Wheel</td><td>zoom</td></tr>
           <tr><td>Right drag</td><td>pan (or Alt + drag)</td></tr>
-          <tr><td>R / M</td><td>respawn (new seed) / next map</td></tr>
+          <tr><td>Esc</td><td>menu: pause, new match</td></tr>
           <tr><td>T</td><td>map picker + tuning sliders</td></tr>
-          <tr><td>H</td><td>hide this help</td></tr>
+          <tr><td>H</td><td>show/hide this help</td></tr>
         </table>
       </div>
     </div>
+    <div id="turn" hidden></div>
+    <div id="teams"></div>
     <div id="wind"><span>Wind</span><div class="track"><div class="bar"></div></div></div>
+    <div id="banner"></div>
     <div id="weapon-panel" hidden></div>
+    <div id="gameover" hidden></div>
+    <div id="setup" hidden></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

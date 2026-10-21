@@ -24,7 +24,8 @@ export type SimEvent =
   | { type: 'death'; wormId: number; cause: 'drowned' | 'killed' }
   | { type: 'sink'; x: number; y: number }
   | { type: 'mineTriggered'; id: number }
-  | { type: 'dud'; x: number; y: number };
+  | { type: 'dud'; x: number; y: number }
+  | { type: 'weaponUsed' };
 
 export interface TeamSetup {
   name: string;
@@ -47,12 +48,12 @@ export class World implements ProjectileContext, WeaponContext {
 
   constructor(
     readonly terrain: Terrain,
-    readonly waterLevel: number,
+    public waterLevel: number,
     readonly rng: () => number = mulberry32(1),
   ) {}
 
-  addWorm(name: string, team: number, x: number, y: number): Worm {
-    const worm = createWorm(this.worms.length, name, team, x, y);
+  addWorm(name: string, team: number, x: number, y: number, hp = 100): Worm {
+    const worm = createWorm(this.worms.length, name, team, x, y, hp);
     this.worms.push(worm);
     if (this.activeWormId < 0) this.activeWormId = worm.id;
     return worm;
@@ -63,11 +64,14 @@ export class World implements ProjectileContext, WeaponContext {
     return worm?.alive ? worm : undefined;
   }
 
-  /** Advances the game by one fixed tick; `input` drives the active worm. */
-  step(input: WormInput): void {
+  /**
+   * Advances the game by one fixed tick; `input` drives the active worm. With `canFire`
+   * false (retreat time) it can still move and use the rope, but not fire weapons.
+   */
+  step(input: WormInput, canFire = true): void {
     this.tick++;
     const active = this.activeWorm;
-    if (active) useWeapons(active, input, this);
+    if (active) useWeapons(active, input, this, canFire);
 
     for (const worm of this.worms) {
       if (!worm.alive) continue;
@@ -88,8 +92,17 @@ export class World implements ProjectileContext, WeaponContext {
     this.projectiles.push(createProjectile(this.nextProjectileId++, launch));
   }
 
+  weaponUsed(): void {
+    this.events.push({ type: 'weaponUsed' });
+  }
+
   changeWind(): void {
     this.wind = Math.round((this.rng() * 2 - 1) * 10) / 10;
+  }
+
+  /** Sudden death: the sea creeps up. */
+  raiseWater(amount: number): void {
+    this.waterLevel -= amount;
   }
 
   /**
@@ -124,20 +137,6 @@ export class World implements ProjectileContext, WeaponContext {
     this.events.push(event);
   }
 
-  /** Makes the next living worm (in id order) the active one. */
-  selectNextWorm(): void {
-    const current = this.activeWorm;
-    if (current) current.charge = null;
-    const count = this.worms.length;
-    for (let i = 1; i <= count; i++) {
-      const worm = this.worms[(this.activeWormId + i) % count];
-      if (worm.alive) {
-        this.activeWormId = worm.id;
-        return;
-      }
-    }
-  }
-
   /** Returns and clears the events produced since the last call. */
   drainEvents(): SimEvent[] {
     const events = this.events;
@@ -153,8 +152,9 @@ export class World implements ProjectileContext, WeaponContext {
 
   private kill(worm: Worm, cause: 'drowned' | 'killed'): void {
     worm.alive = false;
+    worm.rope = null;
+    worm.charge = null;
     this.events.push({ type: 'death', wormId: worm.id, cause });
-    if (worm.id === this.activeWormId) this.selectNextWorm();
   }
 }
 
@@ -174,7 +174,7 @@ function blastPush(dx: number, dy: number, blast: Blast): { vx: number; vy: numb
 }
 
 /** Places every team's worms on the map (alternating teams across it) and scatters mines. */
-export function createMatch(map: GeneratedMap, seed: number, teams: TeamSetup[]): World {
+export function createWorld(map: GeneratedMap, seed: number, teams: TeamSetup[], wormHp = 100): World {
   const { terrain, waterLevel } = map;
   const world = new World(terrain, waterLevel, mulberry32(seed ^ 0x3a7));
   const rng = mulberry32(seed ^ 0x5eed);
@@ -190,7 +190,7 @@ export function createMatch(map: GeneratedMap, seed: number, teams: TeamSetup[])
   const spots = findSpawnPoints(terrain, waterLevel, roster.length, PHYS.wormRadius, rng);
   roster.forEach((entry, i) => {
     const spot = spots[i] ?? { x: terrain.width / 2, y: 0 };
-    world.addWorm(entry.name, entry.team, spot.x, spot.y);
+    world.addWorm(entry.name, entry.team, spot.x, spot.y, wormHp);
   });
 
   // Mines go on other floor spots, never right next to a worm.
@@ -200,6 +200,5 @@ export function createMatch(map: GeneratedMap, seed: number, teams: TeamSetup[])
     .filter(clearOfWorms)
     .slice(0, PHYS.mapMines)
     .forEach((s) => world.spawn({ kind: 'mine', x: s.x, y: s.y, vx: 0, vy: 0, armed: true }));
-  world.changeWind();
   return world;
 }

@@ -177,16 +177,6 @@ describe('Explosions', () => {
     run(world, 60 * 6);
     expect(near.grounded).toBe(true); // eventually settles
   });
-
-  it('switches to the next worm when the active one dies', () => {
-    const world = flatWorld();
-    const a = world.addWorm('A', 0, 400, restingY(GROUND));
-    const b = world.addWorm('B', 1, 700, restingY(GROUND));
-    expect(world.activeWormId).toBe(a.id);
-    world.explode(400, GROUND - R, { radius: 30, damage: 500, reach: 38, push: 1 });
-    expect(a.alive).toBe(false);
-    expect(world.activeWormId).toBe(b.id);
-  });
 });
 
 describe('Image maps', () => {

@@ -9,6 +9,10 @@ export function teamColor(team: number): number {
   return TEAM_COLORS[team % TEAM_COLORS.length];
 }
 
+export function teamColorCss(team: number): string {
+  return `#${teamColor(team).toString(16).padStart(6, '0')}`;
+}
+
 export const labelStyle = (color: number): Phaser.Types.GameObjects.Text.TextStyle => ({
   fontFamily: '"Arial Black", Arial, sans-serif',
   fontSize: '11px',
