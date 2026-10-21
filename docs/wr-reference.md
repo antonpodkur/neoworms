@@ -88,7 +88,8 @@ block, which repeats the Old Woman's numbers (a parsing slip). It starts blinkin
 is ~1.7 wh (27 px) away and goes off 1.07 s and 2.25 s later in two clips (the game's text
 says fuses vary between one and five seconds), so ours picks 1–3 s at random.
 
-**Grenade**, measured: thrown at ~615 px/s (power not visible, so our full power stays 520),
+**Grenade**, measured: a full-power throw leaves at ~630 px/s (ours now 630, was 520), the
+power cone takes ~1.4 s to fill (our `chargeTime`, was 1.2, shared with the bazooka),
 gravity as worms, hard bounces keep ~0.38 of the speed into a surface and ~0.57 along it
 (ours 0.38 / 0.6), a soft landing (~114 px/s) doesn't bounce at all (ours: below 130 px/s), it
 glances off worms keeping ~0.56, fuse as set. Its crater matches the bazooka's row, which it

@@ -126,11 +126,12 @@ const defaults = {
   /** Upward hop when the rope hooks in while standing, so the worm lifts off (1.5× a jump). */
   ropeAutoHop: 165,
 
-  /** Seconds of holding Space to reach full power. */
-  chargeTime: 1.2,
+  /** Seconds of holding Space to reach full power (~1.4 s in WR footage). */
+  chargeTime: 1.4,
   /** Launch speed at full power. */
   bazookaSpeed: 650,
-  grenadeSpeed: 520,
+  /** Measured in WR footage on the calibration map (a full-power throw). */
+  grenadeSpeed: 630,
   /** Push on bazooka shells at full wind strength (wind ranges -1..1). */
   windMax: 120,
   /** Share of speed into a surface that bounces back, and of speed along it kept (measured). */
