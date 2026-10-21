@@ -4,10 +4,9 @@ Renders every sprite action of a .blend into PNG frames, for client/scripts/buil
     blender --background art/worm/worm.blend --python art/scripts/render_sprites.py -- OUT_DIR
 
 Writes OUT_DIR/<action>/0000.png, 0001.png, ... and OUT_DIR/anims.json with each action's frame
-count, speed and whether it loops. See placeholder_worm.py for the action conventions: only
-actions with the custom property "sprite" are rendered, "fps" sets their speed, "weapon" picks
-which "weapon.*" object is visible, and the Manual Frame Range (with Cyclic Animation) sets the
-frames.
+count, speed and whether it loops. See docs/art.md for the action conventions: only actions
+with the custom property "sprite" are rendered, "fps" sets their speed, "weapon" picks which
+"weapon.*" object is visible, and the Manual Frame Range (with Cyclic Animation) sets the frames.
 """
 import json
 import os
@@ -50,12 +49,14 @@ def main():
 
 
 def reset_pose(rig):
-    """Bones an action doesn't key would otherwise keep the previous action's pose."""
+    """Bones and face sliders an action doesn't key would otherwise keep the previous action's pose."""
     for pb in rig.pose.bones:
         pb.location = (0, 0, 0)
         pb.rotation_quaternion = (1, 0, 0, 0)
         pb.rotation_euler = (0, 0, 0)
         pb.scale = (1, 1, 1)
+        for key in pb.keys():
+            pb[key] = pb.id_properties_ui(key).as_dict().get("default", 0.0)
 
 
 main()

@@ -46,8 +46,9 @@ Each milestone ends with something playable.
   - [ ] Playtest the maps and tune them (rope reach, spawn spots, how long the terrain lasts)
   - [ ] Later: themes (soil/stone textures, backdrops), more maps
 - [ ] **7 · Polish**: sprites, animations, sound, particles, gamepad
-  - [x] Worm sprites rendered from Blender (`npm run sprites`, [docs/art.md](docs/art.md)): placeholder worm with idle, walk, jump, fly and bazooka aiming
-  - [ ] The hand-made worm, more animations (backflip, rope swing, weapon draw, hurt, death, drowning, victory), aim poses for every weapon, hats
+  - [x] Worm sprites rendered from Blender (`npm run sprites`, [docs/art.md](docs/art.md)): idle, walk, jump, fly and bazooka aiming
+  - [x] The hand-made worm: a soft pear-shaped body, big touching eyes with floating brows, expressions as shape keys driven from the rig
+  - [ ] More animations (backflip, rope swing, weapon draw, hurt, death, drowning, victory), aim poses for every weapon, hats
   - [x] Terrain look ([docs/terrain.md](docs/terrain.md)): sponge and cobblestone materials, rounded lit edges, dark dug-out craters
   - [x] Seaside scenery ([docs/scenery.md](docs/scenery.md)): parallax sky, clouds, hazy islands, posts and far sea; a cave backdrop (layers rendered in Blender, `npm run backdrops`); jade water with reflections and ripples
   - [x] Explosions ([docs/effects.md](docs/effects.md)): flash, fireball, sparks, debris, smoke, and a molten crater rim that keeps burning

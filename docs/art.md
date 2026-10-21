@@ -10,11 +10,31 @@ built sheet is committed, so playing or working on the game doesn't need Blender
 ## The worm
 
 - `art/worm/worm.blend`: the worm, its rig and animations, the sprite camera and the lights.
-  It's a placeholder built by `art/scripts/placeholder_worm.py`; the hand-made worm replaces
-  the model and animations but keeps the camera, lights and conventions below.
+  It's made by hand in Blender, so the `.blend` is the source: edit it there.
 - `npm run sprites` renders every sprite action in Blender (headless, about 20 s), packs the
   frames into `client/sprites/worm.png` + `worm.json`, and lists each animation's frame count,
   speed and looping in the JSON. `WormView` picks the animation from the worm's state.
+
+### How it's built
+
+- **Body** (`WormBody`): a low-poly cage of about 100 vertices, smoothed by a Subdivision Surface
+  modifier: a pear-shaped column with a flat-topped head, and a tail extruded from the back of
+  the base. Its weights came from Automatic Weights, so after reshaping the cage in Edit Mode,
+  parent it to the rig again with Automatic Weights if the bends look off.
+- **Face**: the eyes (`WormEye.L` / `.R`: white, pupil and glint in one mesh), `WormBrows` and
+  `WormMouth` are separate meshes riding on the `head` bone. The mouth has a Shrinkwrap modifier,
+  so it stays on the skin when the neck bends.
+- **Expressions** are shape keys, driven by sliders on the `face` bone:
+
+  | Slider | Shape keys |
+  |---|---|
+  | `blink`, `squint` | eyes squash shut, upper half flattened |
+  | `look` (−1 to 1) | pupils turn down / up (`look_down`, `look_up`) |
+  | `brow_angry`, `brow_worried`, `brow_up`, `brow_down` | brows (up to 1.5) |
+  | `mouth_open`, `mouth_frown`, `mouth_grin` | mouth (the rest shape is a small smile) |
+
+- **Look**: soft Principled materials (skin `#f2a08a`) and a thin dark outline (`#5a2230`): an
+  inverted hull, a Solidify modifier whose flipped shell has backface culling.
 
 ### Conventions
 
@@ -27,6 +47,11 @@ built sheet is committed, so playing or working on the game doesn't need Blender
 - An action becomes an animation when it has the custom property `sprite` (true). `fps` sets
   its speed (default 24), and the Manual Frame Range sets its frames. With Cyclic Animation on,
   the last frame repeats the first and isn't rendered.
+- An action animates expressions by keying the `face` bone's sliders (data path
+  `pose.bones["face"]["blink"]`). Before each action the renderer puts every bone and slider
+  back to rest, so an action only keys what it changes.
+- The sliders' drivers use simple expressions only (`v`, `max(v, 0)`), which Blender evaluates
+  without Python, so they work in the headless render with auto-run scripts off.
 - `weapon` (e.g. `bazooka`) shows the object `weapon.bazooka` and hides the other `weapon.*`.
 - `aim_<weapon id>` is an aiming pose: one frame per aim angle, from straight down to straight
   up. The game shows it for the worm whose turn it is while that weapon is selected.

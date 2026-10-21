@@ -24,7 +24,7 @@ export const labelStyle = (color: number): Phaser.Types.GameObjects.Text.TextSty
 
 /** The worm sprite sheet, built from art/worm/worm.blend by `npm run sprites`. */
 export const WORM_SHEET = 'worm';
-/** Sprite frames are rendered at 24 pixels per worm radius (see art/scripts/placeholder_worm.py). */
+/** Sprite frames are rendered at 24 pixels per worm radius (see docs/art.md). */
 const SPRITE_PX_PER_RADIUS = 24;
 /** Keep the walk cycle going this long after the last step, so it doesn't flicker between steps. */
 const WALK_HOLD_MS = 120;
