@@ -3,7 +3,7 @@
 Numbers taken from a personal data export of Worms Revolution (level outlines, the
 `StoryLexicon`/`StoryGrammar` parameter tables, game text, tutorial videos). Only numbers and
 observations live here; the game's files themselves are Team17's and are never committed.
-The level outlines go in `maps/wr/` (git-ignored, served by the dev server only).
+The level outlines go in `client/maps/wr/` (git-ignored, served by the dev server only).
 
 ## Scale
 

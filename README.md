@@ -36,6 +36,13 @@ The deploy prints the relay's address, e.g. `neoworms-relay.<you>.workers.dev`. 
 `client/.env.local` as `VITE_RELAY_HOST=neoworms-relay.<you>.workers.dev` (see
 `client/.env.example`) and restart `npm run dev`. Everyone playing needs the same setting.
 
+For now, online play has some limits:
+
+- **Everyone runs the game themselves** with `npm run dev`. The game isn't hosted anywhere yet,
+  and a hosted build would only have the generated maps (Worms Revolution maps stay local).
+- **Reloading the page drops you out of an online match.** Rejoining a match in progress isn't
+  supported yet; the others carry on and your turns are skipped.
+
 Other scripts: `npm test` (simulation tests), `npm run typecheck`, `npm run build`.
 
 ## Controls
@@ -83,6 +90,10 @@ Worms Revolution level outlines can be used locally: copy the `08_maps/*.png` fi
 own export into `client/maps/wr/`. That folder is git-ignored and only the dev server serves it, so the
 files never end up in git or in a production build (they're Team17's, for personal use only).
 Online, a Worms Revolution map only works if every player has it.
+
+These maps used to go in `maps/wr/` at the top of the repo. If you set them up before the move
+to `client/`, move the folder: `mv maps/wr client/maps/wr` (on Windows:
+`move maps\wr client\maps\wr`).
 See [docs/wr-reference.md](docs/wr-reference.md) for what else we took from the game.
 
 ## Tuning
