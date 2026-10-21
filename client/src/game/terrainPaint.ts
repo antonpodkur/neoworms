@@ -4,9 +4,10 @@
  * the slab's height comes from blurring the mask. Behind it sits a dark copy of the map as it
  * was built, so craters read as holes dug into the slab rather than windows to the sky.
  */
-import { createNoise2D, createNoise4D, type NoiseFunction4D } from 'simplex-noise';
+import { createNoise2D, createNoise4D } from 'simplex-noise';
 import { mulberry32 } from '../sim/rng';
 import type { Terrain } from '../sim/terrain';
+import { blurTile, Cells, clamp255, hash, smoothstep, wrappingNoise } from './procedural';
 
 export interface Rect {
   x: number;
@@ -21,18 +22,28 @@ const BEVEL = 6;
 const BEVEL_STRENGTH = 7;
 /** Direction toward the light: up-left and out of the screen (x right, y down, z to you). */
 const LIGHT = normalize(-0.6, -0.75, 0.55);
-/** How much a slope facing toward (or away from) the light brightens (or darkens) it. */
+/** How much a slope facing toward the light brightens it, and one facing away darkens it. */
 const LIGHT_GAIN = 1.1;
+const SHADOW_GAIN = 0.7;
+/**
+ * Colour of the light by which way a slope faces: warm sun on the tops, cool green bounced up
+ * from the water on the undersides (multipliers, reached when facing straight up or down).
+ */
+const SUN_TINT = [1.06, 1.02, 0.9];
+const BOUNCE_TINT = [0.7, 0.98, 0.9];
+/** Ground this close above the water picks up its green. */
+const WATER_GLOW = 90;
+const WATER_TINT = [0.84, 1.0, 1.08];
 /** Darkening right at the edge, fading out a few pixels in. */
-const EDGE_DARK = 0.45;
+const EDGE_DARK = 0.3;
 const EDGE_SOFT = 0.25;
 /** The burnt ring around a crater: how wide it gets, in pixels, and its colour. */
 const SCORCH_WIDTH = 5;
 const SCORCH = [40, 24, 18];
 /** Soil and stone touching: how dark the seam between them is. */
 const SEAM_DARK = 0.35;
-/** The back wall: how dark it is, and the shadow the ground in front casts on it. */
-const BACK_SHADE = [0.36, 0.33, 0.38];
+/** The back wall: dark rock (textured with the stone tile), and the shadow the ground in front casts on it. */
+const BACK = [46, 44, 52];
 const SHADOW_X = 3;
 const SHADOW_Y = 4;
 const SHADOW_DARK = 0.55;
@@ -66,7 +77,11 @@ export class TerrainPainter {
   private readonly drift: Float32Array;
   private readonly driftWidth: number;
 
-  constructor(private readonly terrain: Terrain) {
+  /** `waterLevel` is the y of the water's surface; ground just above it is tinted green. */
+  constructor(
+    private readonly terrain: Terrain,
+    private readonly waterLevel = Infinity,
+  ) {
     const { width, height, mask } = terrain;
     this.pixels = new Uint8ClampedArray(width * height * 4);
     this.original = mask.slice();
@@ -109,7 +124,7 @@ export class TerrainPainter {
   /** Recomputes the colours inside `rect` from the current mask. */
   paint(rect: Rect): void {
     const { width, height, mask } = this.terrain;
-    const { sponge, stone } = materials();
+    const { sand, stone } = materials();
     const px = this.pixels;
     // Heights are needed a pixel around the rect (for slopes) and up-left of it as far as the
     // shadows on the back wall reach.
@@ -140,32 +155,40 @@ export class TerrainPainter {
         }
         const t = ((y & TILE_MASK) * TILE + (x & TILE_MASK)) * 3;
         const drift = 1 + DRIFT * this.sampleDrift(x, y);
+        const wet = smoothstep(WATER_GLOW, 0, this.waterLevel - y);
         let r = 0;
         let g = 0;
         let b = 0;
         if (front > 0) {
-          const tile = solid === 2 ? stone : sponge;
+          const tile = solid === 2 ? stone : sand;
           const gx = (PROFILE[sum[f + 1]] - PROFILE[sum[f - 1]]) * BEVEL_STRENGTH;
           const gy = (PROFILE[sum[f + stride]] - PROFILE[sum[f - stride]]) * BEVEL_STRENGTH;
-          const lit = (LIGHT[2] - gx * LIGHT[0] - gy * LIGHT[1]) / Math.sqrt(1 + gx * gx + gy * gy);
+          const len = Math.sqrt(1 + gx * gx + gy * gy);
+          const lit = (LIGHT[2] - gx * LIGHT[0] - gy * LIGHT[1]) / len;
+          // +1 facing straight up, -1 straight down.
+          const up = gy / len;
+          const tint = up > 0 ? SUN_TINT : BOUNCE_TINT;
+          const facing = Math.abs(up);
           const edge = 1 - EDGE_DARK * (1 - smoothstep(0, EDGE_SOFT, PROFILE[sum[f]]));
           const seam = touchesOther(mask, i, x, width, solid) ? 1 - SEAM_DARK : 1;
-          const shade = (1 + LIGHT_GAIN * (lit - LIGHT[2])) * edge * seam * drift;
+          const shade = (1 + (lit > LIGHT[2] ? LIGHT_GAIN : SHADOW_GAIN) * (lit - LIGHT[2])) * edge * seam * drift;
           const burn = this.scorch[i] / 255;
           const k = shade * (1 - burn) * front;
-          r = tile[t] * k + SCORCH[0] * burn * front;
-          g = tile[t + 1] * k + SCORCH[1] * burn * front;
-          b = tile[t + 2] * k + SCORCH[2] * burn * front;
+          r = tile[t] * k * (1 + (tint[0] - 1) * facing) * (1 + (WATER_TINT[0] - 1) * wet) + SCORCH[0] * burn * front;
+          g = tile[t + 1] * k * (1 + (tint[1] - 1) * facing) * (1 + (WATER_TINT[1] - 1) * wet) + SCORCH[1] * burn * front;
+          b = tile[t + 2] * k * (1 + (tint[2] - 1) * facing) * (1 + (WATER_TINT[2] - 1) * wet) + SCORCH[2] * burn * front;
         }
         // The back wall shows where the ground in front doesn't cover it.
         const behind = back - front;
         if (behind > 0) {
-          const tile = built === 2 ? stone : sponge;
           const caster = sum[f - SHADOW_Y * stride - SHADOW_X] / FULL;
-          const shade = drift * (1 - SHADOW_DARK * smoothstep(0.25, 0.75, caster)) * behind;
-          r += tile[t] * BACK_SHADE[0] * shade;
-          g += tile[t + 1] * BACK_SHADE[1] * shade;
-          b += tile[t + 2] * BACK_SHADE[2] * shade;
+          // Rock textured with the stone tile at twice the size, so it never lines up with stones in front.
+          const rt = ((((y >> 1) + 97) & TILE_MASK) * TILE + (((x >> 1) + 211) & TILE_MASK)) * 3;
+          const rock = 0.6 + (0.8 * (stone[rt] + stone[rt + 1] + stone[rt + 2])) / 765;
+          const shade = rock * drift * (1 - SHADOW_DARK * smoothstep(0.25, 0.75, caster)) * behind;
+          r += BACK[0] * shade;
+          g += BACK[1] * shade;
+          b += BACK[2] * shade;
         }
         const alpha = Math.max(front, back);
         px[o] = r / alpha;
@@ -291,87 +314,94 @@ function driftGrid(width: number, height: number): [Float32Array, number] {
 // ---- Materials ---------------------------------------------------------------------------
 
 /** Side of a material tile. A power of two, so a pixel's spot in it is just `x & TILE_MASK`. */
-const TILE = 256;
+const TILE = 512;
 const TILE_MASK = TILE - 1;
-const TAU = Math.PI * 2;
 
-let cachedMaterials: { sponge: Uint8Array; stone: Uint8Array } | null = null;
+let cachedMaterials: { sand: Uint8Array; stone: Uint8Array } | null = null;
 
 /** The two ground materials as seamless RGB tiles, made once and reused by every map. */
-function materials(): { sponge: Uint8Array; stone: Uint8Array } {
-  cachedMaterials ??= { sponge: spongeTile(), stone: cobblestoneTile() };
+function materials(): { sand: Uint8Array; stone: Uint8Array } {
+  cachedMaterials ??= { sand: sandTile(), stone: cobblestoneTile() };
   return cachedMaterials;
 }
 
-/** Material 1: warm sandy sponge with light dots and dark crack lines. */
-function spongeTile(): Uint8Array {
+/** Material 1: warm sand in big puffy plates with dark grooves, a few light dots and small pits. */
+function sandTile(): Uint8Array {
   const rand = mulberry32(1);
   const noise = createNoise4D(rand);
-  const mottle = wrappingNoise(noise, 3, 0);
-  const fine = wrappingNoise(noise, 11, 40);
-  const crackLine = wrappingNoise(noise, 4, 80);
-  const crackBend = wrappingNoise(noise, 7, 120);
-  const crackFade = wrappingNoise(noise, 3, 160);
-  const dots = new Cells(9, rand);
-  // Cracks run where a bent noise field crosses zero.
-  const field = new Float32Array(TILE * TILE);
+  const mottle = wrappingNoise(noise, TILE, 6, 0);
+  const warpX = wrappingNoise(noise, TILE, 5, 200);
+  const warpY = wrappingNoise(noise, TILE, 5, 240);
+  const plates = new Cells(6, TILE, rand);
+  const spots = new Cells(24, TILE, rand);
+  const height = new Float32Array(TILE * TILE);
+  const ids = new Int32Array(TILE * TILE);
   for (let y = 0; y < TILE; y++) {
-    for (let x = 0; x < TILE; x++) field[y * TILE + x] = crackLine(x + crackBend(x, y) * 10, y + crackBend(y, x) * 10);
+    for (let x = 0; x < TILE; x++) {
+      // Bending the lookup turns the cells' straight edges into lumpy, rounded plates.
+      plates.nearest(x + warpX(x, y) * 14, y + warpY(x, y) * 14);
+      // f2 - f1 is about twice the distance to the groove between two plates.
+      height[y * TILE + x] = Math.sqrt(smoothstep(0.5, 22, plates.f2 - plates.f1));
+      ids[y * TILE + x] = plates.id;
+    }
   }
-  const at = (x: number, y: number) => field[(y & TILE_MASK) * TILE + (x & TILE_MASK)];
+  // Softened, so the plates are smooth pillows without creases.
+  const soft = blurTile(height, TILE, 2);
+  const at = (x: number, y: number) => soft[(y & TILE_MASK) * TILE + (x & TILE_MASK)];
   const tile = new Uint8Array(TILE * TILE * 3);
   for (let y = 0; y < TILE; y++) {
     for (let x = 0; x < TILE; x++) {
-      const m = mottle(x, y) * 0.6 + fine(x, y) * 0.4;
-      let r = 214 + m * 18;
-      let g = 156 + m * 16;
-      let b = 86 + m * 12;
+      const i = y * TILE + x;
+      const h = height[i];
+      const shade = slopeShade(at(x + 1, y) - at(x - 1, y), at(x, y + 1) - at(x, y - 1), 6, 0.8);
+      // Some plates are paler and yellower, some more orange.
+      const tone = plates.value(ids[i]);
+      const m = 1 + mottle(x, y) * 0.05 + (hash(x, y) - 0.5) * 0.05;
+      let r = (238 - tone * 16) * m;
+      let g = (200 - tone * 28) * m;
+      let b = (118 - tone * 32) * m;
+      const groove = 1 - smoothstep(0, 0.4, h);
+      r += (130 - r) * groove;
+      g += (82 - g) * groove;
+      b += (42 - b) * groove;
 
-      // Dots: a lighter round bump in some cells, lit from the upper left.
-      dots.nearest(x, y);
-      const size = dots.value(dots.id);
-      const radius = 2.5 + size * 4;
-      if (size > 0.3 && dots.f1 < radius + 1) {
-        const cover = smoothstep(radius + 1, radius - 1, dots.f1);
-        const nx = dots.dx / radius;
-        const ny = dots.dy / radius;
-        const light = 1 + 0.35 * (-nx * 0.7 - ny * 0.7) * smoothstep(0.3, 1, Math.hypot(nx, ny));
-        r += (246 * light - r) * cover;
-        g += (210 * light - g) * cover;
-        b += (148 * light - b) * cover;
+      // On the plates' tops: light dots, and now and then a small round pit.
+      spots.nearest(x, y);
+      const kind = spots.value(spots.id);
+      const top = smoothstep(0.6, 0.85, h);
+      if (kind > 0.7 && top > 0) {
+        const pit = kind > 0.95;
+        const radius = pit ? 2.5 + (kind - 0.95) * 30 : 2.2 + (kind - 0.7) * 8;
+        const cover = smoothstep(radius + 0.8, radius - 0.8, spots.f1) * top;
+        if (cover > 0) {
+          // A pit's lower-right inside wall faces the light; a dot is flat.
+          const wall = pit ? 1 + (0.45 * (spots.dx + spots.dy)) / radius : 1;
+          const [pr, pg, pb] = pit ? [190, 116, 52] : [252, 240, 182];
+          r += (pr * wall - r) * cover;
+          g += (pg * wall - g) * cover;
+          b += (pb * wall - b) * cover;
+        }
       }
-
-      // Distance to the zero crossing in pixels (value over slope) keeps the lines evenly
-      // thin; they fade out in places so they break up.
-      const slope = Math.hypot(at(x + 1, y) - at(x - 1, y), at(x, y + 1) - at(x, y - 1)) / 2;
-      const distance = Math.abs(at(x, y)) / Math.max(slope, 1e-4);
-      const crack = (1 - smoothstep(0.4, 1.6, distance)) * smoothstep(0, 0.4, crackFade(x, y));
-      r *= 1 - 0.5 * crack;
-      g *= 1 - 0.55 * crack;
-      b *= 1 - 0.6 * crack;
-
-      const grain = 1 + (hash(x, y) - 0.5) * 0.07;
-      const o = (y * TILE + x) * 3;
-      tile[o] = clamp255(r * grain);
-      tile[o + 1] = clamp255(g * grain);
-      tile[o + 2] = clamp255(b * grain);
+      const o = i * 3;
+      tile[o] = clamp255(r * shade);
+      tile[o + 1] = clamp255(g * shade);
+      tile[o + 2] = clamp255(b * shade);
     }
   }
   return tile;
 }
 
-/** Material 2: blue-grey cobblestones, each one rounded and lit, with dark gaps between. */
+/** Material 2: slate-blue cobblestones, each one rounded and lit, with dark gaps between. */
 function cobblestoneTile(): Uint8Array {
   const rand = mulberry32(2);
   const noise = createNoise4D(rand);
-  const mottle = wrappingNoise(noise, 9, 0);
-  const stones = new Cells(7, rand);
+  const mottle = wrappingNoise(noise, TILE, 18, 0);
+  const stones = new Cells(14, TILE, rand);
   const height = new Float32Array(TILE * TILE);
   const ids = new Int32Array(TILE * TILE);
   for (let y = 0; y < TILE; y++) {
     for (let x = 0; x < TILE; x++) {
       stones.nearest(x, y);
-      // f2 - f1 is about twice the distance to the gap between two stones.
       height[y * TILE + x] = Math.sqrt(smoothstep(1.5, 18, stones.f2 - stones.f1));
       ids[y * TILE + x] = stones.id;
     }
@@ -382,105 +412,31 @@ function cobblestoneTile(): Uint8Array {
     for (let x = 0; x < TILE; x++) {
       const i = y * TILE + x;
       const h = height[i];
-      const gx = (at(x + 1, y) - at(x - 1, y)) * 4;
-      const gy = (at(x, y + 1) - at(x, y - 1)) * 4;
-      const lit = (LIGHT[2] - gx * LIGHT[0] - gy * LIGHT[1]) / Math.sqrt(1 + gx * gx + gy * gy);
-      const shade = 1 + 0.9 * (lit - LIGHT[2]);
+      const shade = slopeShade(at(x + 1, y) - at(x - 1, y), at(x, y + 1) - at(x, y - 1), 4, 0.9);
       const tone = stones.value(ids[i]);
-      const m = mottle(x, y) * 0.06 + (hash(x, y) - 0.5) * 0.08;
-      const stoneR = (112 + tone * 34) * (1 + m);
-      const stoneG = (126 + tone * 32) * (1 + m);
-      const stoneB = (148 + tone * 30) * (1 + m);
+      const m = 1 + mottle(x, y) * 0.06 + (hash(x, y) - 0.5) * 0.08;
+      const stoneR = (96 + tone * 30) * m;
+      const stoneG = (106 + tone * 28) * m;
+      const stoneB = (122 + tone * 26) * m;
       const gap = 1 - smoothstep(0, 0.35, h);
       const o = i * 3;
-      tile[o] = clamp255((stoneR + (50 - stoneR) * gap) * shade);
-      tile[o + 1] = clamp255((stoneG + (56 - stoneG) * gap) * shade);
-      tile[o + 2] = clamp255((stoneB + (72 - stoneB) * gap) * shade);
+      tile[o] = clamp255((stoneR + (40 - stoneR) * gap) * shade);
+      tile[o + 1] = clamp255((stoneG + (44 - stoneG) * gap) * shade);
+      tile[o + 2] = clamp255((stoneB + (56 - stoneB) * gap) * shade);
     }
   }
   return tile;
 }
 
-/**
- * Simplex noise that repeats every TILE pixels: each tile axis is wrapped into a circle in 4D.
- * `features` is roughly how many blobs fit across the tile; `offset` decorrelates fields.
- */
-function wrappingNoise(noise: NoiseFunction4D, features: number, offset: number) {
-  const radius = features / TAU;
-  return (x: number, y: number): number => {
-    const a = (x / TILE) * TAU;
-    const b = (y / TILE) * TAU;
-    return noise(Math.cos(a) * radius + offset, Math.sin(a) * radius, Math.cos(b) * radius, Math.sin(b) * radius);
-  };
-}
-
-/**
- * Cell (Worley) noise that wraps around the tile: one random point per cell of an n × n grid.
- * `nearest` finds the closest point and stores its distance, offset and id, plus the
- * distance to the second closest.
- */
-class Cells {
-  f1 = 0;
-  f2 = 0;
-  dx = 0;
-  dy = 0;
-  id = 0;
-  private readonly size: number;
-  private readonly points: Float32Array;
-  private readonly values: Float32Array;
-
-  constructor(private readonly n: number, rand: () => number) {
-    this.size = TILE / n;
-    this.points = Float32Array.from({ length: n * n * 2 }, () => 0.1 + rand() * 0.8);
-    this.values = Float32Array.from({ length: n * n }, rand);
-  }
-
-  /** A random 0..1 value that belongs to a cell. */
-  value(id: number): number {
-    return this.values[id];
-  }
-
-  nearest(x: number, y: number): void {
-    const { n, size, points } = this;
-    const cx = Math.floor(x / size);
-    const cy = Math.floor(y / size);
-    this.f1 = Infinity;
-    this.f2 = Infinity;
-    for (let j = cy - 1; j <= cy + 1; j++) {
-      for (let i = cx - 1; i <= cx + 1; i++) {
-        const id = (((j % n) + n) % n) * n + (((i % n) + n) % n);
-        const dx = x + 0.5 - (i + points[id * 2]) * size;
-        const dy = y + 0.5 - (j + points[id * 2 + 1]) * size;
-        const d = Math.hypot(dx, dy);
-        if (d < this.f1) {
-          this.f2 = this.f1;
-          this.f1 = d;
-          this.dx = dx;
-          this.dy = dy;
-          this.id = id;
-        } else if (d < this.f2) this.f2 = d;
-      }
-    }
-  }
-}
-
-function smoothstep(edge0: number, edge1: number, x: number): number {
-  const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
-  return t * t * (3 - 2 * t);
+/** Brightness of a bump in a tile lit from the upper left, from its height differences across x and y. */
+function slopeShade(dx: number, dy: number, steepness: number, gain: number): number {
+  const gx = dx * steepness;
+  const gy = dy * steepness;
+  const lit = (LIGHT[2] - gx * LIGHT[0] - gy * LIGHT[1]) / Math.sqrt(1 + gx * gx + gy * gy);
+  return 1 + gain * (lit - LIGHT[2]);
 }
 
 function normalize(x: number, y: number, z: number): [number, number, number] {
   const len = Math.hypot(x, y, z);
   return [x / len, y / len, z / len];
-}
-
-function clamp255(v: number): number {
-  return Math.min(255, Math.max(0, Math.round(v)));
-}
-
-/** Cheap per-pixel pseudo-random value in 0..1 for grain. */
-function hash(x: number, y: number): number {
-  let h = Math.imul(x, 374761393) + Math.imul(y, 668265263);
-  h = Math.imul(h ^ (h >>> 13), 1274126177);
-  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }

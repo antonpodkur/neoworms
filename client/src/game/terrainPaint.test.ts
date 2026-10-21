@@ -41,9 +41,16 @@ describe('TerrainPainter', () => {
     const x = Math.round(terrain.width / 2);
     const top = surface(terrain, x);
     const y = top + 10;
+    // Averaged over a patch, so one dark groove or light dot in the texture doesn't decide it.
     const brightness = (px: number, py: number) => {
-      const o = (py * terrain.width + px) * 4;
-      return painter.pixels[o] + painter.pixels[o + 1] + painter.pixels[o + 2];
+      let sum = 0;
+      for (let dy = -4; dy <= 4; dy++) {
+        for (let dx = -4; dx <= 4; dx++) {
+          const o = ((py + dy) * terrain.width + px + dx) * 4;
+          sum += painter.pixels[o] + painter.pixels[o + 1] + painter.pixels[o + 2];
+        }
+      }
+      return sum / 81;
     };
     const before = brightness(x, y);
     blast(terrain, painter, x, y, 25);

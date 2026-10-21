@@ -2,7 +2,8 @@ import Phaser from 'phaser';
 import type { Terrain } from '../sim/terrain';
 import { overlaps, TerrainPainter, union, type Rect } from './terrainPaint';
 
-const KEY = 'terrain';
+/** The terrain's texture; the water mirrors it. */
+export const TERRAIN_TEXTURE = 'terrain';
 
 /**
  * Shows the terrain as one canvas texture (terrainPaint.ts decides the look) and mirrors every
@@ -15,18 +16,20 @@ export class TerrainView {
   /** Areas to repaint at the next flush, merged where they overlap. */
   private dirty: Rect[] = [];
 
+  /** `waterLevel` is where the sea starts; ground just above it picks up the water's green. */
   constructor(
     private readonly scene: Phaser.Scene,
     terrain: Terrain,
     depth: number,
+    waterLevel?: number,
   ) {
-    if (scene.textures.exists(KEY)) scene.textures.remove(KEY);
-    this.texture = scene.textures.createCanvas(KEY, terrain.width, terrain.height)!;
-    this.painter = new TerrainPainter(terrain);
+    if (scene.textures.exists(TERRAIN_TEXTURE)) scene.textures.remove(TERRAIN_TEXTURE);
+    this.texture = scene.textures.createCanvas(TERRAIN_TEXTURE, terrain.width, terrain.height)!;
+    this.painter = new TerrainPainter(terrain, waterLevel);
     this.image = new ImageData(this.painter.pixels, terrain.width, terrain.height);
     this.texture.context.putImageData(this.image, 0, 0);
     this.texture.refresh();
-    scene.add.image(0, 0, KEY).setOrigin(0, 0).setDepth(depth);
+    scene.add.image(0, 0, TERRAIN_TEXTURE).setOrigin(0, 0).setDepth(depth);
   }
 
   /** Scorches the rim of a hole the simulation just carved; the hole shows from the next flush. */

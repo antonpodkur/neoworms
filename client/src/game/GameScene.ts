@@ -15,6 +15,7 @@ import {
   type OnlineSession,
   type OnlineStart,
 } from '../net/OnlineSession';
+import { BackdropView } from './BackdropView';
 import { DEPTH } from './depth';
 import { explosionFlash, floatingText, splash } from './effects';
 import { Hud } from './Hud';
@@ -22,7 +23,7 @@ import { findMap, imageScale, MAPS, type MapEntry } from './maps';
 import { ProjectileView } from './ProjectileView';
 import { RopeView } from './RopeView';
 import { loadSettings, SetupScreen } from './SetupScreen';
-import { TerrainView } from './TerrainView';
+import { TERRAIN_TEXTURE, TerrainView } from './TerrainView';
 import { physicsChanges, showMapPicker, toggleTuningPanel, useHostPhysics, useOwnPhysics } from './TuningPanel';
 import { WaterView } from './WaterView';
 import { WeaponPanel, weaponForKey } from './WeaponPanel';
@@ -36,14 +37,11 @@ const MAX_ZOOM = 2.5;
 /** How far the camera may look past the map edges and above the map. */
 const CAMERA_MARGIN = 300;
 const SKY_HEADROOM = 500;
+/** How far below the map the camera may look, so the sea gets some room on screen. */
+const SEA_VIEW = 220;
 const AIM_DISTANCE = 40;
 const POWER_LENGTH = 48;
 const POWER_SEGMENTS = 12;
-/** Background gradients, top to bottom. Caverns get dark rock instead of sky. */
-const BACKDROPS = {
-  sky: ['#16325c', '#4f86c0', '#a9cfe6'],
-  cave: ['#140e0b', '#2b1e17', '#46332a'],
-};
 /** Online: the player running the game sends its state this often (ticks): 20 times a second. */
 const FRAME_TICKS = 3;
 /** Online: watchers play frames back this many ticks behind the newest, to smooth out jitter... */
@@ -79,6 +77,7 @@ export class GameScene extends Phaser.Scene {
   private online: OnlineStart | null = null;
   private session: OnlineSession | null = null;
   private joinCode = '';
+  private backdrop!: BackdropView;
   private terrainView!: TerrainView;
   private water!: WaterView;
   private wormViews = new Map<number, WormView>();
@@ -158,11 +157,19 @@ export class GameScene extends Phaser.Scene {
     });
 
     const headroom = map.enclosed ? 0 : SKY_HEADROOM;
-    this.addBackdrop(map.enclosed ? 'cave' : 'sky', terrain.width, terrain.height, headroom);
-    this.terrainView = new TerrainView(this, terrain, DEPTH.terrain);
+    this.backdrop = new BackdropView(
+      this,
+      map.enclosed ? 'cave' : 'sky',
+      terrain.width,
+      DEPTH.sky,
+      -headroom,
+      terrain.height + SEA_VIEW,
+      this.world.waterLevel,
+    );
+    this.terrainView = new TerrainView(this, terrain, DEPTH.terrain, this.world.waterLevel);
     createWormAnims(this);
     for (const worm of this.world.worms) this.wormViews.set(worm.id, new WormView(this, worm));
-    this.water = new WaterView(this, DEPTH.water);
+    this.water = new WaterView(this, DEPTH.water, TERRAIN_TEXTURE, terrain.width);
     this.ropeView = new RopeView(this, DEPTH.rope);
     this.projectileView = new ProjectileView(this, DEPTH.projectiles);
     this.weaponPanel = new WeaponPanel(this.weaponStatus, (weapon) => {
@@ -212,6 +219,7 @@ export class GameScene extends Phaser.Scene {
     this.terrainView.flush();
     this.ropeView.update(this.world.worms, this.wormViews);
     this.projectileView.update(this.world.projectiles, alpha, time);
+    this.backdrop.update(time);
     this.water.update(this.cameras.main, time, this.world.waterLevel);
     this.drawAim(time);
     this.updateCamera(delta);
@@ -598,7 +606,7 @@ export class GameScene extends Phaser.Scene {
 
   private setupCamera(width: number, height: number, headroom: number): void {
     const cam = this.cameras.main;
-    cam.setBounds(-CAMERA_MARGIN, -headroom, width + CAMERA_MARGIN * 2, height + headroom);
+    cam.setBounds(-CAMERA_MARGIN, -headroom, width + CAMERA_MARGIN * 2, height + headroom + SEA_VIEW);
     const first = this.world.worms[0];
     if (first) cam.centerOn(first.x, first.y);
   }
@@ -673,27 +681,6 @@ export class GameScene extends Phaser.Scene {
       const ay = y - 40 - i * 34;
       g.lineBetween(ax, ay, ax + worm.facing * 8, ay + 18);
     }
-  }
-
-  private addBackdrop(kind: keyof typeof BACKDROPS, width: number, height: number, headroom: number): void {
-    const key = `backdrop-${kind}`;
-    const colors = BACKDROPS[kind];
-    if (!this.textures.exists(key)) {
-      const tex = this.textures.createCanvas(key, 2, 256)!;
-      const gradient = tex.context.createLinearGradient(0, 0, 0, 256);
-      colors.forEach((color, i) => gradient.addColorStop(i / (colors.length - 1), color));
-      tex.context.fillStyle = gradient;
-      tex.context.fillRect(0, 0, 2, 256);
-      tex.refresh();
-    }
-    // Extra width so zooming out past the camera bounds never shows an edge.
-    const sideways = 4000;
-    this.add
-      .image(-sideways, -headroom, key)
-      .setOrigin(0, 0)
-      .setDisplaySize(width + sideways * 2, height + headroom)
-      .setDepth(DEPTH.sky);
-    this.cameras.main.setBackgroundColor(colors[0]);
   }
 
   private updateHud(): void {
