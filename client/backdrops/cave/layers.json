@@ -1,0 +1,38 @@
+[
+  {
+    "name": "roof_far",
+    "anchor": "top",
+    "offset": 0,
+    "height": 440,
+    "parallax": 0.3,
+    "blur": 1.6,
+    "drift": 0.0
+  },
+  {
+    "name": "floor_far",
+    "anchor": "water",
+    "offset": -10,
+    "height": 400,
+    "parallax": 0.3,
+    "blur": 1.6,
+    "drift": 0.0
+  },
+  {
+    "name": "roof_near",
+    "anchor": "top",
+    "offset": 0,
+    "height": 340,
+    "parallax": 0.5,
+    "blur": 0.8,
+    "drift": 0.0
+  },
+  {
+    "name": "floor_near",
+    "anchor": "water",
+    "offset": -10,
+    "height": 320,
+    "parallax": 0.5,
+    "blur": 0.8,
+    "drift": 0.0
+  }
+]

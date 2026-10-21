@@ -12,6 +12,7 @@
     "test": "npm test -w client",
     "typecheck": "npm run typecheck --workspaces",
     "maps": "npm run maps -w client",
-    "sprites": "npm run sprites -w client"
+    "sprites": "npm run sprites -w client",
+    "backdrops": "npm run backdrops -w client"
   }
 }

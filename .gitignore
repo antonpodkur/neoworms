@@ -8,3 +8,8 @@ dist
 
 # Worms Revolution assets extracted from a personal copy: personal use only (Team17's), never commit.
 client/maps/wr/
+
+# Python bytecode from the Blender scripts
+__pycache__/
+# Blender's backup of the previous save
+*.blend1

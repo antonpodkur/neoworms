@@ -1,0 +1,38 @@
+[
+  {
+    "name": "clouds",
+    "anchor": "horizon",
+    "offset": 300,
+    "height": 520,
+    "parallax": 0.1,
+    "blur": 1.0,
+    "drift": 4
+  },
+  {
+    "name": "islands_far",
+    "anchor": "horizon",
+    "offset": 0,
+    "height": 220,
+    "parallax": 0.18,
+    "blur": 1.2,
+    "drift": 0.0
+  },
+  {
+    "name": "islands_near",
+    "anchor": "horizon",
+    "offset": -10,
+    "height": 190,
+    "parallax": 0.3,
+    "blur": 0.6,
+    "drift": 0.0
+  },
+  {
+    "name": "posts",
+    "anchor": "horizon",
+    "offset": -140,
+    "height": 260,
+    "parallax": 0.4,
+    "blur": 1.0,
+    "drift": 0.0
+  }
+]

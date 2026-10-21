@@ -49,7 +49,7 @@ Each milestone ends with something playable.
   - [x] Worm sprites rendered from Blender (`npm run sprites`, [docs/art.md](docs/art.md)): placeholder worm with idle, walk, jump, fly and bazooka aiming
   - [ ] The hand-made worm, more animations (backflip, rope swing, weapon draw, hurt, death, drowning, victory), aim poses for every weapon, hats
   - [x] Terrain look ([docs/terrain.md](docs/terrain.md)): sponge and cobblestone materials, rounded lit edges, dark dug-out craters
-  - [x] Seaside scenery ([docs/scenery.md](docs/scenery.md)): parallax sky, clouds, hazy islands and far sea; a cave backdrop; jade water with reflections and ripples
+  - [x] Seaside scenery ([docs/scenery.md](docs/scenery.md)): parallax sky, clouds, hazy islands, posts and far sea; a cave backdrop (layers rendered in Blender, `npm run backdrops`); jade water with reflections and ripples
   - [ ] More themes, explosions (fire, smoke, debris)
 
 ## Rope design notes (milestone 2)

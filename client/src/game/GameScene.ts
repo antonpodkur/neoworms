@@ -139,6 +139,7 @@ export class GameScene extends Phaser.Scene {
     const key = imageKey(this.map);
     if (this.map.kind === 'image' && !this.textures.exists(key)) this.load.image(key, this.map.url);
     if (!this.textures.exists(WORM_SHEET)) this.load.atlas(WORM_SHEET, wormSheetUrl, wormAtlasUrl);
+    BackdropView.preload(this.load);
   }
 
   create(): void {

@@ -5,32 +5,36 @@ inspired by Worms Revolution's seaside levels: a bright sky with big clouds, haz
 the horizon, the sea running out to it, and jade water with soft reflections. It's only
 inspired by them, not copied.
 
-All of it is made in code when the map loads, from Phaser's own building blocks (images,
-tile sprites, graphics gradients, the Blur filter) and the noise helpers in
-`client/src/game/procedural.ts`. There are no image files. None of it touches the simulation.
+The layers behind the terrain (clouds, islands, posts, cave rock) are rendered in Blender
+(see [art.md](art.md#backdrops)) and committed as PNG strips in `client/backdrops/`. Everything
+else is made in code when the map loads, from Phaser's own building blocks (images, tile
+sprites, graphics gradients, the Blur filter) and the noise helpers in
+`client/src/game/procedural.ts`. None of it touches the simulation.
 
 ## Backdrop (`BackdropView.ts`)
 
-Layers, back to front, all behind the terrain:
+Seaside maps, back to front, all behind the terrain:
 
-| Layer | What | Parallax |
-|---|---|---|
-| Sky | gradient, deep blue at the top to pale cyan at the horizon | none |
-| Far sea | gradient from the horizon down, pale and hazy to jade, with faint glints | glints 0.4 |
-| Clouds | a few big cumulus heaps at different heights, drifting slowly | 0.1 |
-| Far islands | pale, soft island silhouettes on the horizon | 0.18 |
-| Near islands | bluer silhouettes, one with a lighthouse | 0.3 |
+| Layer | What | Made in | Parallax |
+|---|---|---|---|
+| Sky | gradient, deep blue at the top to pale cyan at the horizon | code | none |
+| Far sea | gradient from the horizon down, pale and hazy to jade, with faint glints | code | glints 0.4 |
+| Clouds | four big cumulus heaps at different heights, drifting slowly | Blender | 0.1 |
+| Far islands | pale, soft, rugged island silhouettes on the horizon | Blender | 0.18 |
+| Near islands | bluer islands, one with a lighthouse | Blender | 0.3 |
+| Posts | leaning mooring posts, a broken jetty and a sailboat, mirrored in the sea | Blender | 0.4 |
+
+Cave maps get a dark brown gradient, two rows of stalactites hanging from the top of the map
+and two rows of rock mounds and stalagmites standing on the water, the near row with a few
+glowing crystals.
 
 The horizon sits `HORIZON` (320 px) above the water, so the far sea shows behind the low parts
-of the terrain. Parallax is horizontal only, which keeps the horizon steady.
+of the terrain. Parallax is horizontal only, which keeps the horizon steady. Each rendered layer
+comes with its placement, parallax, blur and drift in `client/backdrops/<theme>/layers.json`.
 
-Each layer is drawn once into a 2048 px wide canvas texture that repeats sideways. It's drawn
-three tiles wide and the middle kept, so shapes and the blur carry on across the repeat.
-Farther layers are paler and more blurred: the blur is the canvas's own `filter`, applied
-once when the layer is drawn, so it costs nothing per frame.
-
-Cave maps get a dark brown gradient instead, with two rows of stalactites hanging from the top
-and two rows of rock mounds rising from the floor.
+Each strip is 2048 px wide and repeats sideways. When the map loads it's drawn into a canvas
+three tiles wide, softened with the canvas's own blur `filter` (more for farther layers), and
+the middle tile kept. So the blur carries on across the repeat and costs nothing per frame.
 
 ## Water (`WaterView.ts`)
 

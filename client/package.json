@@ -10,7 +10,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "maps": "node --no-warnings scripts/build-maps.ts",
-    "sprites": "node --no-warnings scripts/build-sprites.ts"
+    "sprites": "node --no-warnings scripts/build-sprites.ts",
+    "backdrops": "node --no-warnings scripts/build-backdrops.ts"
   },
   "dependencies": {
     "lil-gui": "^0.21.0",
