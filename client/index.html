@@ -84,34 +84,109 @@
         border-radius: 4px;
         background: linear-gradient(90deg, #7fd3ff, #4d9dff);
       }
+      /* Weapon panel, styled after Worms Revolution's Inventory. */
       #weapon-panel {
         position: fixed;
-        right: 16px;
-        bottom: 56px;
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        padding: 8px;
-        border-radius: 10px;
-        background: rgba(10, 20, 40, 0.88);
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        padding: 10px 14px 12px;
+        border: 3px solid #141414;
+        border-radius: 14px;
+        background: rgba(48, 42, 38, 0.94);
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.55);
         color: #fff;
-        font: 600 12px system-ui, sans-serif;
+        font: 800 13px system-ui, sans-serif;
         user-select: none;
       }
-      #weapon-panel .title {
-        padding: 0 2px 4px;
-        min-height: 16px;
-        text-align: center;
+      #weapon-panel .header {
+        margin: 0 -6px 10px;
+        padding: 5px 16px;
+        border-radius: 6px;
+        background: linear-gradient(#5a5450, #3d3834);
+        color: #ff8a3d;
+        font: italic 900 18px system-ui, sans-serif;
+        text-shadow: 0 2px 0 #1b1b1b;
       }
-      #weapon-panel .row {
-        display: flex;
-        align-items: center;
-        gap: 4px;
+      #weapon-panel .grid {
+        display: grid;
+        gap: 8px;
       }
       #weapon-panel .key {
-        width: 24px;
-        color: #8fa6c8;
+        text-align: center;
+        color: #b9b0a8;
         font-size: 11px;
+      }
+      #weapon-panel .slot {
+        position: relative;
+        width: 58px;
+        height: 58px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 2px solid #f2efe9;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      #weapon-panel .slot.weapon {
+        background: linear-gradient(#d0893a, #9c5a22);
+      }
+      #weapon-panel .slot.tool {
+        background: linear-gradient(#5d8fd0, #2f5a96);
+      }
+      #weapon-panel .slot.empty,
+      #weapon-panel .slot.unavailable {
+        background: linear-gradient(#77736f, #5c5955);
+      }
+      #weapon-panel .slot.empty {
+        border-color: #a9a5a0;
+        cursor: default;
+      }
+      #weapon-panel .slot .icon {
+        font-size: 30px;
+        line-height: 1;
+        filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.45));
+      }
+      #weapon-panel .slot.unavailable .icon {
+        filter: grayscale(1) brightness(0.85);
+        opacity: 0.8;
+      }
+      #weapon-panel .slot .ammo,
+      #weapon-panel .slot .wait {
+        position: absolute;
+        font: 900 14px system-ui, sans-serif;
+        text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+      }
+      #weapon-panel .slot .ammo {
+        top: 1px;
+        left: 4px;
+        color: #fff;
+      }
+      #weapon-panel .slot .wait {
+        right: 4px;
+        bottom: 1px;
+        color: #c9b8ff;
+      }
+      #weapon-panel .slot.selected {
+        background: linear-gradient(#ffad4d, #e0711f);
+        box-shadow: 0 0 14px 5px rgba(255, 140, 40, 0.75);
+      }
+      #weapon-panel .footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 24px;
+        margin: 12px -6px 0;
+        padding: 5px 14px;
+        border-radius: 6px;
+        background: linear-gradient(#e4e1dc, #b9b5af);
+        color: #2b2724;
+        font: 900 16px system-ui, sans-serif;
+      }
+      #weapon-panel .footer .note {
+        color: #6b5f55;
+        font-size: 13px;
+        align-self: center;
       }
       #hud-help[hidden],
       #weapon-panel[hidden],
@@ -119,35 +194,6 @@
       #gameover[hidden],
       #turn[hidden] {
         display: none;
-      }
-      #weapon-panel .weapon {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 2px;
-        width: 48px;
-        padding: 5px 2px 3px;
-        border: 2px solid transparent;
-        border-radius: 7px;
-        background: rgba(255, 255, 255, 0.08);
-        color: #fff;
-        font: 600 11px system-ui, sans-serif;
-        cursor: pointer;
-      }
-      #weapon-panel .weapon .icon {
-        font-size: 22px;
-        line-height: 1;
-      }
-      #weapon-panel .weapon.unavailable .icon {
-        filter: grayscale(1);
-        opacity: 0.35;
-      }
-      #weapon-panel .weapon.unavailable .badge {
-        color: #ff8a8a;
-      }
-      #weapon-panel .weapon.selected {
-        border-color: #ffd23f;
-        background: rgba(255, 210, 63, 0.18);
       }
       button {
         font: 600 14px system-ui, sans-serif;
