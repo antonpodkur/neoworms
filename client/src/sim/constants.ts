@@ -99,6 +99,13 @@ const defaults = {
    */
   blastMinAngle: 65,
 
+  /*
+   * Ninja rope. Not calibrated yet: these values were tuned by feel against the old, ~20%
+   * faster movement, and the WR rope clip recorded so far didn't hold still enough to measure
+   * (it only showed 3 rope shots per turn). Rope length, swing, climb speed and letting go
+   * still need footage on the calibration map; until then expect the rope to feel a bit off
+   * next to the slower gravity.
+   */
   /** Total rope length, including the parts bent around corners. */
   ropeMaxLength: 380,
   ropeMinLength: 16,
