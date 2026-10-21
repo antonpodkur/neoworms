@@ -55,13 +55,21 @@ built sheet is committed, so playing or working on the game doesn't need Blender
 - `weapon` (e.g. `bazooka`) shows the object `weapon.bazooka` and hides the other `weapon.*`.
 - `aim_<weapon id>` is an aiming pose: one frame per aim angle, from straight down to straight
   up. The game shows it for the worm whose turn it is while that weapon is selected.
+- `rope` is a pose too: one frame per swing speed across the rope, from swinging backward fast
+  (the body trails ahead) through hanging still (the middle frame) to swinging forward fast. The
+  game turns the sprite so its top points at the rope, which comes in at the top of the head.
 
 | Animation | When the game plays it |
 |---|---|
 | `idle` | standing still |
 | `walk` | walking |
 | `jump` | crouching before a jump, and sliding after a hard landing |
-| `fly_up` / `fly_down` | in the air, rising / falling; `fly_up` also hangs from the rope |
+| `fly_up` / `fly_down` | in the air, rising / falling |
+| `backflip` | flying after a backflip, until it lands (it holds the last frame) |
+| `rope` | hanging on the rope |
+| `hurt` | thrown by a blast, and flinching for a moment after losing health |
+| `dying` | standing at 0 HP, waiting to blow up at the end of the turn |
+| `drown` | sinking after drowning, while it fades |
 | `aim_bazooka` | aiming the bazooka |
 
 Thrown worms tumble (the game spins the sprite) and worms on the rope turn toward the rope.

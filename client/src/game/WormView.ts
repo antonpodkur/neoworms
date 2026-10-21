@@ -30,6 +30,15 @@ const SPRITE_PX_PER_RADIUS = 24;
 const WALK_HOLD_MS = 120;
 /** A thrown worm tumbles this many radians per pixel it travels sideways. */
 const TUMBLE = 1 / 60;
+/** Swinging this fast (px/s) across the rope shows the fullest lean; the body trails behind. */
+const ROPE_FULL_LEAN = 450;
+/** How quickly the rope lean follows the swing speed (seconds to cover most of the way). */
+const ROPE_LEAN_EASE = 0.08;
+/** A worm on the ground flinches this long after losing health. */
+const HURT_MS = 600;
+/** A drowned worm sinks this far (px) while it fades, over this long. */
+const DROWN_SINK = 40;
+const DROWN_MS = 1400;
 
 interface SheetAnim {
   frames: number;
@@ -60,10 +69,16 @@ export class WormView {
   private readonly name: Phaser.GameObjects.Text;
   private readonly hp: Phaser.GameObjects.Text;
   private shownHp: number;
-  /** The animation playing, or 'aim' while a frame is picked by the aim angle. */
+  /** The animation playing, or 'pose' while a frame is picked by a value (aim angle, rope swing). */
   private anim = '';
+  /** Rope swing speed shown, eased: -1 swinging backward fast, 1 forward fast. */
+  private ropeLean = 0;
   /** scene.time.now when the worm last took a step. */
   private movedAt = -Infinity;
+  /** scene.time.now when the worm last lost health. */
+  private hurtAt = -Infinity;
+  /** Took off with a backflip and hasn't landed yet: the flip plays through the flight. */
+  private flipping = false;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -90,41 +105,59 @@ export class WormView {
     this.x = worm.prevX + (worm.x - worm.prevX) * alpha;
     this.y = worm.prevY + (worm.y - worm.prevY) * alpha;
     this.body.setPosition(this.x, this.y).setFlipX(worm.facing < 0);
+    if (worm.hp !== this.shownHp) {
+      if (worm.hp < this.shownHp) this.hurtAt = this.scene.time.now;
+      this.shownHp = worm.hp;
+      this.hp.setText(String(worm.hp));
+    }
     this.animate(worm, aiming);
     const r = PHYS.wormRadius;
     this.hp.setPosition(this.x, this.y - r * 2.3);
     this.name.setPosition(this.x, this.y - r * 3.9);
-    if (worm.hp !== this.shownHp) {
-      this.shownHp = worm.hp;
-      this.hp.setText(String(worm.hp));
-    }
   }
 
   /** Picks the animation (or the aiming frame) and the body's rotation from the worm's state. */
   private animate(worm: Worm, aiming: boolean): void {
     const now = this.scene.time.now;
     if (worm.grounded && (worm.x !== worm.prevX || worm.walkProgress > 0)) this.movedAt = now;
+    if (worm.pendingJump) this.flipping = worm.pendingJump.kind === 'backflip';
+    else if (worm.grounded || worm.rope || worm.knocked) this.flipping = false;
     const aimAnim = this.scene.anims.get(`aim_${worm.weapon}`);
     let rotation = 0;
     if (worm.rope?.phase === 'attached') {
-      // Hang with the head toward the rope's last pivot.
+      // Hang with the head toward the rope's last pivot, the body trailing the swing.
       const pivot = worm.rope.pivots[worm.rope.pivots.length - 1];
       rotation = Math.atan2(pivot.x - this.x, this.y - pivot.y);
-      this.play('fly_up');
+      const forward = (worm.vx * Math.cos(rotation) + worm.vy * Math.sin(rotation)) * worm.facing;
+      const target = Phaser.Math.Clamp(forward / ROPE_FULL_LEAN, -1, 1);
+      const ease = 1 - Math.exp(-this.scene.game.loop.delta / 1000 / ROPE_LEAN_EASE);
+      this.ropeLean += (target - this.ropeLean) * ease;
+      // One frame per swing speed: the first swings backward fast, the middle hangs, the last swings forward.
+      this.pose(this.scene.anims.get('rope')!, (this.ropeLean + 1) / 2);
     } else if (!worm.grounded) {
-      if (worm.knocked) rotation = this.body.rotation + worm.vx * TUMBLE * (this.scene.game.loop.delta / 1000);
-      this.play(worm.vy < 0 && !worm.knocked ? 'fly_up' : 'fly_down');
-    } else if (worm.pendingJump || worm.slide !== 0) this.play('jump');
+      if (worm.knocked) {
+        rotation = this.body.rotation + worm.vx * TUMBLE * (this.scene.game.loop.delta / 1000);
+        this.play('hurt');
+      } else if (this.flipping) this.play('backflip');
+      else this.play(worm.vy < 0 ? 'fly_up' : 'fly_down');
+    } else if (worm.pendingJump) this.play('jump');
+    else if (now - this.hurtAt < HURT_MS) this.play('hurt');
+    else if (worm.slide !== 0) this.play('jump');
     else if (now - this.movedAt < WALK_HOLD_MS) this.play('walk');
     else if (aiming && aimAnim) {
       // One frame per aim angle: the first aims straight down, the last straight up.
-      const frames = aimAnim.frames;
-      const i = Math.round(((worm.aim + Math.PI / 2) / Math.PI) * (frames.length - 1));
-      this.anim = 'aim';
-      this.body.anims.stop();
-      this.body.setFrame(frames[i].textureFrame);
-    } else this.play('idle');
+      this.pose(aimAnim, (worm.aim + Math.PI / 2) / Math.PI);
+    } else if (worm.hp <= 0) this.play('dying'); // waits to blow up at the end of the turn
+    else this.play('idle');
     this.body.setRotation(rotation);
+  }
+
+  /** Shows the frame of `anim` at `t` (0 = first, 1 = last) instead of playing it. */
+  private pose(anim: Phaser.Animations.Animation, t: number): void {
+    const frames = anim.frames;
+    this.anim = 'pose';
+    this.body.anims.stop();
+    this.body.setFrame(frames[Math.round(t * (frames.length - 1))].textureFrame);
   }
 
   private play(anim: string): void {
@@ -134,12 +167,14 @@ export class WormView {
   }
 
   die(cause: 'drowned' | 'killed'): void {
+    const drowned = cause === 'drowned';
+    if (drowned) this.play('drown');
     const parts = [this.body, this.name, this.hp];
     this.scene.tweens.add({
       targets: parts,
       alpha: 0,
-      y: cause === 'drowned' ? '+=30' : '-=10',
-      duration: 700,
+      y: drowned ? `+=${DROWN_SINK}` : '-=10',
+      duration: drowned ? DROWN_MS : 700,
       onComplete: () => parts.forEach((p) => p.destroy()),
     });
   }
