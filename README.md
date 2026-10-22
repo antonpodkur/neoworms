@@ -61,12 +61,13 @@ Worms Revolution's PC defaults.
 | Right Shift / right click | weapon panel (arrows or mouse to choose, Space, Enter or click to pick) |
 | F1–F5 / F6–F10 | Quick Select: pick from a weapon row / utility row of the panel without opening it; press again for the next in the row |
 | 1–5 | fuse in seconds for the grenade, cluster and banana bombs |
-| Tab | Toggle: cycle the fuse, or flip the air strike's direction |
-| Click the map | call in the air strike there (with the Air Strike selected) |
+| Tab | Toggle: cycle the fuse, flip the air strike's direction, turn the girder, or pick the next worm for Worm Select |
+| Click the map | Air Strike, Teleport or Girder: use it there |
+| Space with a utility | Parachute: open / close (it also opens by itself on a long fall; ← → steer). Jet Pack: on / off (↑ ← → fly while there's fuel). Skip Go: end the turn. Surrender: give up. Worm Select: start picking, Tab for the next worm, Space again to switch |
 | Space with the rope | shoot the rope / let go / shoot again mid-air |
 | ← → on rope | swing |
 | ↑ ↓ on rope | climb / descend |
-| Enter on rope | AltFire: drop the selected grenade, cluster or banana bomb, dynamite or mine |
+| Enter on the rope, parachute or jet pack | AltFire: drop the selected grenade, cluster or banana bomb, dynamite or mine |
 | Mouse wheel | zoom |
 | Right drag / Alt + drag | pan |
 | Esc | menu: pause, resume, new match |

@@ -1,3 +1,11 @@
+/** An inclusive box of pixels. */
+export interface Bounds {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
 export interface Vec2 {
   x: number;
   y: number;
@@ -45,6 +53,42 @@ export class Terrain {
 
   carve(cx: number, cy: number, r: number): void {
     this.fillCircle(cx, cy, r, false);
+  }
+
+  /**
+   * Fills a bar `length` × `thickness` centred on (cx, cy), turned `angle` radians, with ground
+   * of `material` (a girder). Returns the box of pixels it may have touched, clipped to the map.
+   */
+  fillBar(cx: number, cy: number, angle: number, length: number, thickness: number, material = 2): Bounds | null {
+    const bounds = this.barBounds(cx, cy, angle, length, thickness);
+    if (!bounds) return null;
+    const { x0, y0, x1, y1 } = bounds;
+    const ux = Math.cos(angle);
+    const uy = Math.sin(angle);
+    const halfL = length / 2;
+    const halfT = thickness / 2;
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        const dx = x + 0.5 - cx;
+        const dy = y + 0.5 - cy;
+        // Distance along the bar and across it.
+        if (Math.abs(dx * ux + dy * uy) <= halfL && Math.abs(dy * ux - dx * uy) <= halfT) {
+          this.mask[y * this.width + x] = material;
+        }
+      }
+    }
+    return bounds;
+  }
+
+  /** The pixels a bar like fillBar's may cover, clipped to the map; null if it's off the map. */
+  barBounds(cx: number, cy: number, angle: number, length: number, thickness: number): Bounds | null {
+    const ex = Math.abs(Math.cos(angle)) * (length / 2) + Math.abs(Math.sin(angle)) * (thickness / 2);
+    const ey = Math.abs(Math.sin(angle)) * (length / 2) + Math.abs(Math.cos(angle)) * (thickness / 2);
+    const x0 = Math.max(0, Math.floor(cx - ex));
+    const x1 = Math.min(this.width - 1, Math.ceil(cx + ex));
+    const y0 = Math.max(0, Math.floor(cy - ey));
+    const y1 = Math.min(this.height - 1, Math.ceil(cy + ey));
+    return x0 > x1 || y0 > y1 ? null : { x0, y0, x1, y1 };
   }
 
   /** FNV-1a fingerprint of which pixels are ground, to check two players built the same map. */

@@ -16,6 +16,22 @@ export function splash(scene: Phaser.Scene, x: number, y: number): void {
   });
 }
 
+/** A ring that shrinks into (or bursts out of) a point: a worm teleporting out or in. */
+export function teleportFlash(scene: Phaser.Scene, x: number, y: number, arriving: boolean): void {
+  const g = scene.add.graphics().setDepth(DEPTH.effects).setPosition(x, y);
+  g.lineStyle(3, 0x9fe8ff, 1);
+  g.strokeCircle(0, 0, 14);
+  g.setScale(arriving ? 0.2 : 1.4);
+  scene.tweens.add({
+    targets: g,
+    scale: arriving ? 1.6 : 0.1,
+    alpha: 0,
+    duration: 450,
+    ease: 'Cubic.easeOut',
+    onComplete: () => g.destroy(),
+  });
+}
+
 /** Text that drifts up and fades out, e.g. damage numbers. */
 export function floatingText(scene: Phaser.Scene, x: number, y: number, text: string, color: number): void {
   const t = scene.add

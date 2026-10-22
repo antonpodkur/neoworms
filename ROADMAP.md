@@ -42,6 +42,7 @@ Each milestone ends with something playable.
   - [ ] Deploy the relay (needs a Cloudflare login) and host the game (e.g. GitHub Pages)
   - [ ] Later: rejoin after a page reload, spectators, chat
 - [ ] **6 · Maps & content**: themes, import a map from an image, more weapons, crates, barrels
+  - [x] Utilities: Parachute, Jet Pack, Teleport, Girder, Skip Go, Surrender, Worm Select (numbers by feel; WR's ammo counts)
   - [x] Up to 8 teams (hot-seat and online); our own maps, 4 for 2–4 teams and 3 for 5–8 teams, drawn as mirrored SVGs and built to PNG ([docs/maps.md](docs/maps.md)); worms and mines start in mirrored pairs on symmetric maps
   - [ ] Playtest the maps and tune them (rope reach, spawn spots, how long the terrain lasts)
   - [ ] Later: themes (soil/stone textures, backdrops), more maps

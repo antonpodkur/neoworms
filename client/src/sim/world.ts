@@ -26,7 +26,14 @@ export type SimEvent =
   | { type: 'mineTriggered'; id: number }
   | { type: 'dud'; x: number; y: number }
   | { type: 'hit'; x: number; y: number; landed: boolean }
-  | { type: 'weaponUsed'; weapon: WeaponId };
+  | { type: 'weaponUsed'; weapon: WeaponId }
+  /** A utility was used without ending the turn (parachute, jet pack, skip go, worm select). */
+  | { type: 'utilityUsed'; weapon: WeaponId }
+  | { type: 'teleport'; wormId: number; fromX: number; fromY: number }
+  /** A girder was put in: the terrain changed like a carve does, but filled in. */
+  | { type: 'girder'; x: number; y: number; angle: number }
+  | { type: 'skipGo' }
+  | { type: 'surrender'; team: number };
 
 /** Everything about a World that changes as the game is played (all but the terrain). */
 export interface WorldState {
@@ -115,12 +122,13 @@ export class World implements ProjectileContext, WeaponContext {
 
   /**
    * Advances the game by one fixed tick; `input` drives the active worm. With `canFire`
-   * false (retreat time) it can still move and use the rope, but not fire weapons.
+   * false (retreat time) it can still move and use the rope, but not fire weapons; `canUse`
+   * says whether its team may use the selected utility (parachute, jet pack) at all.
    */
-  step(input: WormInput, canFire = true): void {
+  step(input: WormInput, canFire = true, canUse = canFire): void {
     this.tick++;
     const active = this.activeWorm;
-    if (active) useWeapons(active, input, this, canFire);
+    if (active) useWeapons(active, input, this, canFire, canUse);
 
     for (const worm of this.worms) {
       if (!worm.alive) continue;
@@ -128,7 +136,7 @@ export class World implements ProjectileContext, WeaponContext {
       worm.prevY = worm.y;
       let wormInput = worm === active ? input : NO_INPUT;
       if (worm.charge !== null) wormInput = { ...wormInput, ...CHARGING_LOCK };
-      const fallDamage = stepWorm(worm, wormInput, this.terrain);
+      const fallDamage = stepWorm(worm, wormInput, this.terrain, this.wind);
       if (fallDamage > 0) this.damage(worm, fallDamage);
       if (worm.alive && worm.y - PHYS.wormRadius > this.waterLevel) this.kill(worm, 'drowned');
     }
@@ -143,6 +151,70 @@ export class World implements ProjectileContext, WeaponContext {
 
   weaponUsed(weapon: WeaponId): void {
     this.events.push({ type: 'weaponUsed', weapon });
+  }
+
+  utilityUsed(weapon: WeaponId): void {
+    this.events.push({ type: 'utilityUsed', weapon });
+  }
+
+  /** Whether a worm fits at (x, y): in the map, in open air, above the water. */
+  fitsAt(x: number, y: number): boolean {
+    const r = PHYS.wormRadius;
+    const { width } = this.terrain;
+    return x > r && x < width - r && y > r && y + r < this.waterLevel && this.terrain.discFree(x, y, r);
+  }
+
+  teleport(worm: Worm, x: number, y: number): boolean {
+    if (!this.fitsAt(x, y)) return false;
+    this.events.push({ type: 'teleport', wormId: worm.id, fromX: worm.x, fromY: worm.y });
+    worm.x = worm.prevX = x;
+    worm.y = worm.prevY = y;
+    worm.vx = 0;
+    worm.vy = 0;
+    worm.grounded = false; // it lands from there
+    worm.knocked = false;
+    worm.slide = 0;
+    worm.rope = null;
+    worm.ropeChain = false;
+    worm.parachute = false;
+    worm.jetpack = null;
+    return true;
+  }
+
+  /** Where a girder may go: within reach of the worm, inside the map, not over any worm. */
+  girderFits(worm: Worm, x: number, y: number, angle: number): boolean {
+    if (Math.hypot(x - worm.x, y - worm.y) > PHYS.girderRange) return false;
+    if (x < 0 || y < 0 || x >= this.terrain.width || y >= this.waterLevel) return false;
+    const ux = Math.cos(angle);
+    const uy = Math.sin(angle);
+    const reach = PHYS.girderThickness / 2 + PHYS.wormRadius;
+    return this.worms.every((w) => {
+      if (!w.alive) return true;
+      const dx = w.x - x;
+      const dy = w.y - y;
+      const along = Math.max(0, Math.abs(dx * ux + dy * uy) - PHYS.girderLength / 2);
+      return Math.hypot(along, dy * ux - dx * uy) >= reach;
+    });
+  }
+
+  placeGirder(worm: Worm, x: number, y: number, angle: number): boolean {
+    if (!this.girderFits(worm, x, y, angle)) return false;
+    this.terrain.fillBar(x, y, angle, PHYS.girderLength, PHYS.girderThickness);
+    this.events.push({ type: 'girder', x, y, angle });
+    return true;
+  }
+
+  skipTurn(): void {
+    this.events.push({ type: 'skipGo' });
+  }
+
+  surrender(team: number): void {
+    this.events.push({ type: 'surrender', team });
+  }
+
+  /** Takes a team off the map (it surrendered): its worms just go, without blowing up. */
+  removeTeam(team: number): void {
+    for (const worm of this.worms) if (worm.alive && worm.team === team) this.kill(worm, 'killed');
   }
 
   changeWind(): void {
@@ -241,6 +313,8 @@ export class World implements ProjectileContext, WeaponContext {
     worm.pendingJump = null;
     worm.ropeChain = false;
     worm.rope = null; // blasts knock worms off their rope
+    worm.parachute = false;
+    worm.jetpack = null;
   }
 
   /** A worm brought to 0 HP stays on the map until the turn ends, then blows up. */

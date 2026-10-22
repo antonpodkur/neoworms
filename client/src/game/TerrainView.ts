@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { Terrain } from '../sim/terrain';
+import type { Bounds, Terrain } from '../sim/terrain';
 import { overlaps, TerrainPainter, union, type Rect } from './terrainPaint';
 
 /** The terrain's texture; the water mirrors it. */
@@ -34,7 +34,15 @@ export class TerrainView {
 
   /** Scorches the rim of a hole the simulation just carved; the hole shows from the next flush. */
   carve(x: number, y: number, r: number): void {
-    const changed = this.painter.carve(x, y, r);
+    this.markDirty(this.painter.carve(x, y, r));
+  }
+
+  /** New ground (a girder) the simulation just put in this box; it shows from the next flush. */
+  fill(bounds: Bounds | null): void {
+    if (bounds) this.markDirty(this.painter.fill(bounds.x0, bounds.y0, bounds.x1, bounds.y1));
+  }
+
+  private markDirty(changed: Rect | null): void {
     if (!changed) return;
     // An air strike or cluster lands several holes in one frame; repaint each spot once.
     let rect = changed;

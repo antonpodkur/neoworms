@@ -63,6 +63,7 @@ export interface MatchState {
   nextWormIndex: number[];
   ammo: Ammo[];
   teamTurns: number[];
+  selecting: number | null;
 }
 
 /** Shots left per weapon for one team; null is unlimited. */
@@ -103,6 +104,11 @@ export class Match {
   /** Per team, shots left of each weapon and how many turns it has started. */
   private readonly ammo: Ammo[];
   private readonly teamTurns: number[];
+  /**
+   * Worm Select: the team's worm highlighted to take over the turn, while the player picks
+   * one (Space starts picking, Tab moves on, Space again confirms); null otherwise.
+   */
+  selecting: number | null = null;
   private events: MatchEvent[] = [];
 
   constructor(
@@ -150,7 +156,9 @@ export class Match {
     // Weapons the team has run out of, or can't use yet, can't be picked or fired.
     if (control.select && !this.usable(control.select)) control = { ...control, select: null };
     const weapon = control.select ?? this.world.activeWorm?.weapon;
-    this.world.step(control, this.phase === 'playing' && (!weapon || this.usable(weapon)));
+    control = this.wormSelect(control, weapon);
+    const ok = !weapon || this.usable(weapon);
+    this.world.step(control, this.phase === 'playing' && ok, inControl && ok);
     this.elapsedTicks++;
     for (const e of this.world.drainEvents()) this.onWorldEvent(e);
 
@@ -183,6 +191,7 @@ export class Match {
       nextWormIndex: [...this.nextWormIndex],
       ammo: this.ammo.map((a) => ({ ...a })),
       teamTurns: [...this.teamTurns],
+      selecting: this.selecting,
     };
   }
 
@@ -201,6 +210,7 @@ export class Match {
     this.nextWormIndex.splice(0, this.nextWormIndex.length, ...state.nextWormIndex);
     this.ammo.splice(0, this.ammo.length, ...state.ammo);
     this.teamTurns.splice(0, this.teamTurns.length, ...state.teamTurns);
+    this.selecting = state.selecting ?? null;
   }
 
   /** Returns and clears world and match events since the last call. */
@@ -212,7 +222,7 @@ export class Match {
 
   private onWorldEvent(e: SimEvent): void {
     this.events.push(e);
-    if (e.type === 'weaponUsed') {
+    if (e.type === 'weaponUsed' || e.type === 'utilityUsed') {
       const left = this.ammo[this.turnTeam]?.[e.weapon];
       if (left != null) this.ammo[this.turnTeam][e.weapon] = Math.max(0, left - 1);
     }
@@ -221,10 +231,45 @@ export class Match {
       this.ticksLeft = Math.round(this.settings.retreatTime * TICK_RATE);
     }
     if (this.phase !== 'playing' && this.phase !== 'retreat') return;
+    if (e.type === 'skipGo') return this.endTurn();
+    if (e.type === 'surrender') {
+      this.world.removeTeam(e.team);
+      return this.endTurn();
+    }
     // Getting hurt ends your turn on the spot, and so does wiping out the last enemy.
     const harm = e.type === 'damage' || e.type === 'death';
     const hurt = harm && e.wormId === this.world.activeWormId;
     if (hurt || (harm && this.teamsStanding().length <= 1)) this.endTurn();
+  }
+
+  /**
+   * Worm Select, before the world sees the input: with it in hand while the turn is still
+   * free, Space starts picking (the active worm highlighted), Tab moves on to the team's next
+   * living worm, and Space again hands the turn to the highlighted one. Returns the input
+   * without the keys it used.
+   */
+  private wormSelect(input: WormInput, weapon: WeaponId | undefined): WormInput {
+    const active = this.world.activeWorm;
+    if (weapon !== 'wormSelect' || this.phase !== 'playing' || !active) {
+      this.selecting = null;
+      return input;
+    }
+    if (!input.fire && !input.toggle) return input;
+    const team = this.world.worms.filter((w) => w.team === active.team && w.alive && w.hp > 0);
+    if (this.selecting === null) {
+      if (input.fire && this.usable('wormSelect') && team.length > 1) this.selecting = active.id;
+    } else if (input.toggle) {
+      const at = team.findIndex((w) => w.id === this.selecting);
+      this.selecting = team[(at + 1) % team.length].id;
+    } else if (input.fire) {
+      const chosen = this.selecting;
+      this.selecting = null;
+      if (chosen !== active.id) {
+        this.world.activeWormId = chosen;
+        this.world.utilityUsed('wormSelect');
+      }
+    }
+    return { ...input, fire: false, fireHeld: false, toggle: false };
   }
 
   /** Whether the team whose turn it is can use this weapon now. */
@@ -248,7 +293,9 @@ export class Match {
       worm.rope = null; // let go; it falls with everything else
       worm.charge = null;
       worm.pendingJump = null;
+      worm.jetpack = null; // the jet pack cuts out; a parachute stays open until it lands
     }
+    this.selecting = null;
   }
 
   /** Nothing moving: worms standing, grenades and shells gone, mines lying still and quiet. */

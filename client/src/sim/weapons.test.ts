@@ -340,7 +340,7 @@ describe('Air strike', () => {
     const worm = standingWorm(world, 200, 'airstrike');
     run(world, 1, { toggle: true });
     expect(worm.strikeDir).toBe(-1);
-    run(world, 1, { target: 800 });
+    run(world, 1, { target: { x: 800, y: 0 } });
     expect(world.projectiles.every((p) => p.vx < 0)).toBe(true);
   });
 
@@ -349,7 +349,7 @@ describe('Air strike', () => {
     standingWorm(world, 200, 'airstrike');
     run(world, 1, { fire: true }); // Space alone does nothing
     expect(world.projectiles).toHaveLength(0);
-    run(world, 1, { target: 800 });
+    run(world, 1, { target: { x: 800, y: 0 } });
     expect(world.projectiles.filter((p) => p.kind === 'missile')).toHaveLength(AIRSTRIKE.missiles);
     const hits: number[] = [];
     for (let t = 0; t < 600 && world.projectiles.length > 0; t++) {
@@ -463,5 +463,114 @@ describe('Weapon panel layout', () => {
     expect(QUICK_SELECT.map((q) => q.key)).toEqual(['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10']);
     expect(QUICK_SELECT[0].row).toBe(PANEL.weapons[0]);
     expect(QUICK_SELECT[5].row).toBe(PANEL.utilities[0]);
+  });
+});
+
+describe('Parachute', () => {
+  /** A worm high above the ground, falling, holding `weapon`. */
+  function falling(weapon: Worm['weapon']) {
+    const world = groundWorld();
+    const worm = world.addWorm('P', 0, 300, 60);
+    worm.weapon = weapon;
+    return { world, worm };
+  }
+
+  it('opens by itself on a long fall and lands without fall damage', () => {
+    const { world, worm } = falling('parachute');
+    let fastest = 0;
+    let opened = false;
+    for (let t = 0; t < 60 * 20 && !worm.grounded; t++) {
+      run(world, 1);
+      if (worm.parachute) {
+        opened = true;
+        fastest = Math.max(fastest, worm.vy);
+      }
+    }
+    expect(opened).toBe(true);
+    expect(worm.grounded).toBe(true);
+    expect(worm.parachute).toBe(false); // folded away on landing
+    expect(worm.hp).toBe(100);
+    expect(fastest).toBeLessThan(PHYS.parachuteAutoOpen + 10);
+  });
+
+  it('without one, the same fall hurts', () => {
+    const { world, worm } = falling('rope');
+    for (let t = 0; t < 60 * 10 && !worm.grounded; t++) run(world, 1);
+    expect(worm.hp).toBeLessThan(100);
+  });
+
+  it('opens and closes with Space, and steers with ← →', () => {
+    const { world, worm } = falling('parachute');
+    run(world, 1, { fire: true });
+    expect(worm.parachute).toBe(true);
+    const x0 = worm.x;
+    run(world, 60, { right: true });
+    expect(worm.x).toBeGreaterThan(x0 + 20);
+    run(world, 1, { fire: true });
+    expect(worm.parachute).toBe(false);
+  });
+});
+
+describe('Jet pack', () => {
+  it('goes on with Space, flies up on ↑ burning fuel, and goes off with Space', () => {
+    const world = groundWorld();
+    const worm = standingWorm(world, 300, 'jetpack');
+    run(world, 1, { fire: true });
+    expect(worm.jetpack).toBe(PHYS.jetpackFuel);
+    const y0 = worm.y;
+    run(world, 60, { up: true });
+    expect(worm.y).toBeLessThan(y0 - 40);
+    expect(worm.jetpack).toBeLessThan(PHYS.jetpackFuel - 0.9);
+    run(world, 1, { fire: true });
+    expect(worm.jetpack).toBeNull();
+    run(world, 120);
+    expect(worm.grounded).toBe(true);
+  });
+
+  it('runs out of fuel', () => {
+    const world = groundWorld();
+    const worm = standingWorm(world, 300, 'jetpack');
+    run(world, 1, { fire: true });
+    run(world, (PHYS.jetpackFuel + 1) * 60, { right: true });
+    expect(worm.jetpack).toBe(0);
+  });
+});
+
+describe('Teleport', () => {
+  it('moves the worm to a clicked spot in the open, but not into the ground', () => {
+    const world = groundWorld();
+    const worm = standingWorm(world, 200, 'teleport');
+    const into = run(world, 1, { target: { x: 600, y: GROUND + 40 } }); // inside the ground
+    expect(worm.x).toBe(200);
+    expect(into.some((e) => e.type === 'weaponUsed')).toBe(false);
+    const events = run(world, 1, { target: { x: 600, y: GROUND - 100 } });
+    expect(worm.x).toBe(600);
+    expect(events).toContainEqual({ type: 'weaponUsed', weapon: 'teleport' });
+    run(world, 120);
+    expect(worm.grounded).toBe(true); // dropped down from there
+  });
+});
+
+describe('Girder', () => {
+  it('puts a bar of ground where the map is clicked, turned with Tab', () => {
+    const world = groundWorld();
+    const worm = standingWorm(world, 200, 'girder');
+    run(world, 1, { toggle: true });
+    run(world, 1, { toggle: true });
+    expect(worm.girderAngle).toBe(2);
+    const at = { x: 300, y: GROUND - 80 };
+    expect(world.terrain.isSolid(at.x, at.y)).toBe(false);
+    const events = run(world, 1, { target: at });
+    expect(world.terrain.isSolid(at.x, at.y)).toBe(true);
+    expect(events).toContainEqual({ type: 'girder', x: at.x, y: at.y, angle: Math.PI / 4 });
+  });
+
+  it("can't go out of reach or onto a worm", () => {
+    const world = groundWorld();
+    const worm = standingWorm(world, 200, 'girder');
+    run(world, 1, { target: { x: 200 + PHYS.girderRange + 50, y: GROUND - 60 } });
+    run(world, 1, { target: { x: worm.x, y: worm.y } });
+    expect(world.drainEvents().some((e) => e.type === 'girder')).toBe(false);
+    expect(world.terrain.isSolid(worm.x, worm.y)).toBe(false);
   });
 });

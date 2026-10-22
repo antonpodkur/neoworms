@@ -157,6 +157,29 @@ const defaults = {
   mineDudChance: 0.1,
   /** Mines scattered on the map at the start. */
   mapMines: 6,
+
+  /*
+   * Utilities. WR's data only gives class multipliers (Soldier: parachute steering 1.1, jet
+   * pack fuel and steering 1), so these are by feel until there's footage to measure.
+   */
+  /** Parachute: falls no faster than this... */
+  parachuteFallSpeed: 55,
+  /** ...steers with ← → (×1.1 for a Soldier, WR's ParachuteManoeuverabilityMultiplier)... */
+  parachuteSteer: 120,
+  parachuteMaxSide: 90,
+  /** ...drifts with the wind, up to this speed at full wind... */
+  parachuteWind: 60,
+  /** ...and opens by itself when a worm holding it falls faster than this. */
+  parachuteAutoOpen: 160,
+  /** Jet pack: seconds of thrust, upward and sideways thrust, top speed. */
+  jetpackFuel: 6,
+  jetpackThrustUp: 560,
+  jetpackThrustSide: 320,
+  jetpackMaxSpeed: 180,
+  /** Girder: a steel bar this long and thick, placed within this distance of the worm. */
+  girderLength: 80,
+  girderThickness: 8,
+  girderRange: 180,
 };
 
 export type Physics = typeof defaults;

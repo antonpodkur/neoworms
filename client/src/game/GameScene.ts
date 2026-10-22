@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
-import { DT, TICK_RATE } from '../sim/constants';
+import { DT, PHYS, TICK_RATE } from '../sim/constants';
 import { generateMap, mapFromImage, type GeneratedMap } from '../sim/mapgen';
 import { createMatch, type Match, type MatchEvent, type MatchSettings } from '../sim/match';
 import { randomSeed } from '../sim/rng';
-import { QUICK_SELECT, WEAPONS, type WeaponId, type WeaponStatus } from '../sim/weapons';
+import { girderRadians, QUICK_SELECT, WEAPONS, type WeaponId, type WeaponStatus } from '../sim/weapons';
 import type { World } from '../sim/world';
 import { NO_INPUT, type Worm, type WormInput } from '../sim/worm';
 import {
@@ -17,7 +17,7 @@ import {
 } from '../net/OnlineSession';
 import { BackdropView } from './BackdropView';
 import { DEPTH } from './depth';
-import { floatingText, splash } from './effects';
+import { floatingText, splash, teleportFlash } from './effects';
 import { Explosions } from './explosions';
 import { Hud } from './Hud';
 import { findMap, imageScale, MAPS, type MapEntry } from './maps';
@@ -88,6 +88,10 @@ export class GameScene extends Phaser.Scene {
   private weaponPanel!: WeaponPanel;
   private setup!: SetupScreen;
   private aimGfx!: Phaser.GameObjects.Graphics;
+  /** Parachutes and jet packs, drawn over the worms. */
+  private utilGfx!: Phaser.GameObjects.Graphics;
+  /** Jet pack fuel per worm last frame: it's burning while that goes down. */
+  private lastFuel = new Map<number, number>();
   private hud!: Hud;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   /** Key presses waiting for the next simulation tick. */
@@ -95,7 +99,7 @@ export class GameScene extends Phaser.Scene {
   /** A weapon picked from the menu, waiting for the next simulation tick. */
   private picked: WeaponId | null = null;
   /** Where the map was clicked for an air strike, waiting for the next simulation tick. */
-  private pickedTarget: number | null = null;
+  private pickedTarget: { x: number; y: number } | null = null;
   private accumulator = 0;
   private followActive = true;
   /** Online: events since the last frame we sent. */
@@ -181,6 +185,7 @@ export class GameScene extends Phaser.Scene {
       this.followActive = true;
     });
     this.aimGfx = this.add.graphics().setDepth(DEPTH.labels);
+    this.utilGfx = this.add.graphics().setDepth(DEPTH.worms);
     this.hud = new Hud();
     this.hud.hideGameOver();
     this.setup = new SetupScreen(MAPS, {
@@ -223,6 +228,7 @@ export class GameScene extends Phaser.Scene {
     this.terrainView.flush();
     this.ropeView.update(this.world.worms, this.wormViews);
     this.projectileView.update(this.world.projectiles, alpha, time);
+    this.drawUtilities(time);
     this.backdrop.update(time);
     this.water.update(this.cameras.main, time, this.world.waterLevel);
     this.drawAim(time);
@@ -288,7 +294,10 @@ export class GameScene extends Phaser.Scene {
 
   /** Shows a frame: its events (craters, damage...), then its state. */
   private applyFrame(frame: Frame): void {
-    for (const e of frame.events) if (e.type === 'carve') this.world.terrain.carve(e.x, e.y, e.r);
+    for (const e of frame.events) {
+      if (e.type === 'carve') this.world.terrain.carve(e.x, e.y, e.r);
+      if (e.type === 'girder') this.world.terrain.fillBar(e.x, e.y, e.angle, PHYS.girderLength, PHYS.girderThickness);
+    }
     this.handleEvents(frame.events);
     const worms = new Map(this.world.worms.map((w) => [w.id, w]));
     const projectiles = new Map(this.world.projectiles.map((p) => [p.id, p]));
@@ -467,6 +476,23 @@ export class GameScene extends Phaser.Scene {
         case 'dud':
           floatingText(this, e.x, e.y - 10, 'dud', 0xcccccc);
           break;
+        case 'girder':
+          this.terrainView.fill(
+            this.world.terrain.barBounds(e.x, e.y, e.angle, PHYS.girderLength, PHYS.girderThickness),
+          );
+          break;
+        case 'teleport': {
+          const worm = this.world.worms[e.wormId];
+          teleportFlash(this, e.fromX, e.fromY, false);
+          teleportFlash(this, worm.x, worm.y, true);
+          break;
+        }
+        case 'skipGo':
+          this.hud.showBanner(`${this.settings.teams[this.match.turnTeam]} skips`, '#ffffff');
+          break;
+        case 'surrender':
+          this.hud.showBanner(`${this.settings.teams[e.team]} surrenders!`, teamColorCss(e.team), 2500);
+          break;
         case 'hit':
           floatingText(this, e.x, e.y - 20, e.landed ? 'WHACK!' : 'whoosh', e.landed ? 0xffe14d : 0xcccccc);
           if (e.landed) this.cameras.main.shake(120, 0.004);
@@ -490,6 +516,7 @@ export class GameScene extends Phaser.Scene {
         case 'suddenDeath': // announced with the turn that follows
         case 'mineTriggered':
         case 'weaponUsed':
+        case 'utilityUsed':
           break;
       }
     }
@@ -573,8 +600,10 @@ export class GameScene extends Phaser.Scene {
       if (!p.leftButtonDown() || p.event.altKey || this.weaponPanel.isOpen) return;
       const worm = this.match.activeWorm;
       const mine = !this.online || this.isRunningGame();
-      if (!worm || !mine || WEAPONS[worm.weapon].use !== 'strike') return;
-      this.pickedTarget = Math.round(this.cameras.main.getWorldPoint(p.x, p.y).x);
+      const use = worm && WEAPONS[worm.weapon].use;
+      if (!worm || !mine || (use !== 'strike' && use !== 'target')) return;
+      const at = this.cameras.main.getWorldPoint(p.x, p.y);
+      this.pickedTarget = { x: Math.round(at.x), y: Math.round(at.y) };
       this.followActive = true;
     });
     // A right click (not a drag, that pans) opens and closes the weapon panel, as in Worms.
@@ -653,9 +682,21 @@ export class GameScene extends Phaser.Scene {
     g.fillTriangle(view.x - 6, my - 9, view.x + 6, my - 9, view.x, my);
     g.strokeTriangle(view.x - 6, my - 9, view.x + 6, my - 9, view.x, my);
 
+    // Worm Select: a white marker bobs over the worm that would take over.
+    const picking = this.match.selecting !== null ? this.wormViews.get(this.match.selecting) : undefined;
+    if (picking && picking !== view) {
+      const py = picking.y - 40 + Math.sin(time / 120) * 4;
+      g.fillStyle(0xffffff, 1);
+      g.fillTriangle(picking.x - 6, py - 9, picking.x + 6, py - 9, picking.x, py);
+      g.strokeTriangle(picking.x - 6, py - 9, picking.x + 6, py - 9, picking.x, py);
+    }
+
     // While hanging on the rope, ↑ ↓ climb instead of aiming.
     if (worm.rope?.phase === 'attached') return;
-    if (WEAPONS[worm.weapon].use === 'strike') return this.drawStrikeTarget(g, worm);
+    const use = WEAPONS[worm.weapon].use;
+    if (use === 'strike') return this.drawStrikeTarget(g, worm);
+    if (use === 'target') return this.drawPlacement(g, worm);
+    if (use === 'self') return;
     const cx = view.x + Math.cos(worm.aim) * worm.facing * AIM_DISTANCE;
     const cy = view.y - Math.sin(worm.aim) * AIM_DISTANCE;
     g.lineStyle(2, 0xff3b3b, 1);
@@ -680,6 +721,73 @@ export class GameScene extends Phaser.Scene {
       const to = 12 + (t + 1 / POWER_SEGMENTS) * POWER_LENGTH;
       g.lineStyle(3 + t * 5, Phaser.Display.Color.GetColor(color.r, color.g, color.b), 1);
       g.lineBetween(view.x + dx * from, view.y + dy * from, view.x + dx * to, view.y + dy * to);
+    }
+  }
+
+  /**
+   * Teleport and girder: an outline under the pointer, green where it can go and red where it
+   * can't; the girder also shows how far from the worm it may go.
+   */
+  private drawPlacement(g: Phaser.GameObjects.Graphics, worm: Worm): void {
+    const pointer = this.input.activePointer;
+    const { x, y } = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    if (worm.weapon === 'teleport') {
+      g.lineStyle(2, this.world.fitsAt(x, y) ? 0x5dff8a : 0xff3b3b, 1);
+      g.strokeCircle(x, y, PHYS.wormRadius);
+      g.lineBetween(x, y + PHYS.wormRadius + 3, x, y + PHYS.wormRadius + 9);
+      return;
+    }
+    const angle = girderRadians(worm.girderAngle);
+    const ok = this.world.girderFits(worm, x, y, angle);
+    g.lineStyle(1, 0xffffff, 0.25);
+    g.strokeCircle(worm.x, worm.y, PHYS.girderRange);
+    const ux = Math.cos(angle) * (PHYS.girderLength / 2);
+    const uy = Math.sin(angle) * (PHYS.girderLength / 2);
+    const tx = -Math.sin(angle) * (PHYS.girderThickness / 2);
+    const ty = Math.cos(angle) * (PHYS.girderThickness / 2);
+    g.lineStyle(2, ok ? 0x5dff8a : 0xff3b3b, 1);
+    g.beginPath();
+    g.moveTo(x - ux - tx, y - uy - ty);
+    g.lineTo(x + ux - tx, y + uy - ty);
+    g.lineTo(x + ux + tx, y + uy + ty);
+    g.lineTo(x - ux + tx, y - uy + ty);
+    g.closePath();
+    g.strokePath();
+  }
+
+  /** Open parachutes over their worms, and jet packs with a flame while they burn. */
+  private drawUtilities(time: number): void {
+    const g = this.utilGfx.clear();
+    for (const worm of this.world.worms) {
+      const view = this.wormViews.get(worm.id);
+      if (!worm.alive || !view) continue;
+      const r = PHYS.wormRadius;
+      if (worm.parachute) {
+        // Above the name and health labels, with its lines running down to the worm.
+        const cy = view.y - r * 7.2;
+        g.lineStyle(1, 0xf2f2f2, 0.9);
+        g.lineBetween(view.x - r * 2.2, cy, view.x - 3, view.y - r);
+        g.lineBetween(view.x + r * 2.2, cy, view.x + 3, view.y - r);
+        g.fillStyle(0xe8483f, 1);
+        g.slice(view.x, cy + 4, r * 2.6, Math.PI, 0, false);
+        g.fillPath();
+        g.fillStyle(0xffffff, 1);
+        g.slice(view.x, cy + 4, r * 2.6, -Math.PI * 0.62, -Math.PI * 0.38, false);
+        g.fillPath();
+      }
+      const fuel = worm.jetpack;
+      if (fuel !== null) {
+        const burning = fuel < (this.lastFuel.get(worm.id) ?? fuel);
+        this.lastFuel.set(worm.id, fuel);
+        const bx = view.x - worm.facing * r * 0.9;
+        g.fillStyle(0x6b7280, 1);
+        g.fillRoundedRect(bx - 4, view.y - r * 0.8, 8, r * 1.4, 2);
+        if (burning) {
+          const flicker = 6 + Math.sin(time / 30) * 2;
+          g.fillStyle(0xffb347, 0.95);
+          g.fillTriangle(bx - 3, view.y + r * 0.6, bx + 3, view.y + r * 0.6, bx, view.y + r * 0.6 + flicker + 4);
+        }
+      } else this.lastFuel.delete(worm.id);
     }
   }
 
@@ -738,7 +846,11 @@ function weaponLabel(worm: Worm, status: WeaponStatus): string {
   const weapon = WEAPONS[worm.weapon];
   const ammo = status.ammo === null ? '' : ` ×${status.ammo}`;
   if (weapon.hasFuse) return `${weapon.name}${ammo} (${worm.fuse} s)`;
-  return weapon.use === 'strike' ? `${weapon.name}${ammo} (click the map)` : `${weapon.name}${ammo}`;
+  if (worm.jetpack !== null) return `Jet Pack (fuel ${worm.jetpack.toFixed(1)} s)`;
+  if (worm.weapon === 'girder') return `${weapon.name}${ammo} (click the map, Tab turns it)`;
+  if (weapon.use === 'strike' || weapon.use === 'target') return `${weapon.name}${ammo} (click the map)`;
+  if (worm.weapon === 'wormSelect') return `${weapon.name}${ammo} (Space, Tab, Space)`;
+  return `${weapon.name}${ammo}`;
 }
 
 function imageKey(map: MapEntry): string {

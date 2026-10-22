@@ -13,6 +13,13 @@ const ICONS: Record<WeaponId, string> = {
   airstrike: '✈️',
   bat: '🏏',
   prod: '👉',
+  parachute: '🪂',
+  jetpack: '🎒',
+  teleport: '🌀',
+  girder: '🧱',
+  skipGo: '⏭️',
+  surrender: '🏳️',
+  wormSelect: '🔄',
 };
 
 interface Cell {

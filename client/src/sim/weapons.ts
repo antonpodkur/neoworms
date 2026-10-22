@@ -14,7 +14,14 @@ export type WeaponId =
   | 'oldWoman'
   | 'airstrike'
   | 'bat'
-  | 'prod';
+  | 'prod'
+  | 'parachute'
+  | 'jetpack'
+  | 'teleport'
+  | 'girder'
+  | 'skipGo'
+  | 'surrender'
+  | 'wormSelect';
 
 /**
  * An explosion, the way Worms Revolution describes one: a crater, then damage and push that
@@ -35,9 +42,11 @@ export interface Blast {
 
 /**
  * How a weapon is used. throw: hold Space to charge, release to fire. place: set down in
- * front of the worm. melee: hits a worm next to it. strike: click the map to call it in.
+ * front of the worm. melee: hits a worm next to it. strike: click the map to call it in from
+ * the sky (needs open sky). target: click the map to use it there (teleport, girder). self:
+ * Space uses it on the worm or the turn (parachute, jet pack, skip go, surrender, worm select).
  */
-export type WeaponUse = 'rope' | 'throw' | 'place' | 'melee' | 'strike';
+export type WeaponUse = 'rope' | 'throw' | 'place' | 'melee' | 'strike' | 'target' | 'self';
 
 export interface WeaponSpec {
   name: string;
@@ -62,6 +71,13 @@ export const WEAPONS: Record<WeaponId, WeaponSpec> = {
   airstrike: { name: 'Air Strike', use: 'strike', projectile: 'missile', droppable: false, hasFuse: false },
   bat: { name: 'Baseball Bat', use: 'melee', droppable: false, hasFuse: false },
   prod: { name: 'Prod', use: 'melee', droppable: false, hasFuse: false },
+  parachute: { name: 'Parachute', use: 'self', droppable: false, hasFuse: false },
+  jetpack: { name: 'Jet Pack', use: 'self', droppable: false, hasFuse: false },
+  teleport: { name: 'Teleport', use: 'target', droppable: false, hasFuse: false },
+  girder: { name: 'Girder', use: 'target', droppable: false, hasFuse: false },
+  skipGo: { name: 'Skip Go', use: 'self', droppable: false, hasFuse: false },
+  surrender: { name: 'Surrender', use: 'self', droppable: false, hasFuse: false },
+  wormSelect: { name: 'Worm Select', use: 'self', droppable: false, hasFuse: false },
 };
 
 export const WEAPON_ORDER = Object.keys(WEAPONS) as WeaponId[];
@@ -88,11 +104,12 @@ export const PANEL: { weapons: PanelSlot[][]; utilities: PanelSlot[][] } = {
     [soon('Sheep'), soon('Mole'), null, 'oldWoman', soon('Super Sheep'), null, soon('Concrete Donkey')],
   ],
   utilities: [
-    [soon('Jet Pack'), 'rope', soon('Parachute'), soon('Teleport')],
-    [soon('Blow Torch'), soon('Pneumatic Drill'), soon('Girder'), soon('Wrench')],
+    ['jetpack', 'rope', 'parachute', 'teleport'],
+    [soon('Blow Torch'), soon('Pneumatic Drill'), 'girder', soon('Wrench')],
     [soon('Telekinesis'), soon('UFO'), soon('Electromagnet'), null],
     [soon('Plug Hole'), soon('Teleshield'), null, soon('Stick Up')],
-    [soon('Worm Select'), soon('Skip Go'), null, null],
+    // In WR's in-game Inventory the white flag sits at the end of this row.
+    ['wormSelect', 'skipGo', null, 'surrender'],
   ],
 };
 
@@ -132,6 +149,12 @@ export const SCHEMES: Record<SchemeId, { name: string; ammo: Record<WeaponId, Am
       oldWoman: { count: 1, delay: 3 },
       airstrike: { count: 1, delay: 2 },
       bat: { count: 1, delay: 0 },
+      // Utility counts from WR's scheme editor (parachute and surrender unlimited).
+      jetpack: { count: 3, delay: 0 },
+      teleport: { count: 4, delay: 0 },
+      girder: { count: 2, delay: 0 },
+      wormSelect: { count: 2, delay: 0 },
+      skipGo: { count: 4, delay: 0 },
     },
   },
   unlimited: { name: 'Unlimited', ammo: unlimited() },
@@ -254,15 +277,30 @@ export interface WeaponContext {
   surfaceY(x: number): number;
   /** A weapon (not the rope) went off: the match starts retreat time. */
   weaponUsed(weapon: WeaponId): void;
+  /** A utility that doesn't end the turn was used (parachute, jet pack): only its ammo goes. */
+  utilityUsed(weapon: WeaponId): void;
+  /** Moves the worm to (x, y) if it fits there; false if not. */
+  teleport(worm: Worm, x: number, y: number): boolean;
+  /** Puts a girder at (x, y) turned `angle`, if it's within reach and clear of worms. */
+  placeGirder(worm: Worm, x: number, y: number, angle: number): boolean;
+  /** Ends the turn now (Skip Go). */
+  skipTurn(): void;
+  /** The worm's team gives up (Surrender). */
+  surrender(team: number): void;
 }
+
+/** A girder's angle in radians from its eighths of a half turn. */
+export const girderRadians = (step: number): number => (step * Math.PI) / 8;
 
 /**
  * The active worm's weapon controls, WR's: pick a weapon, 1–5 to set a fuse, Tab (Toggle) to
- * cycle the fuse or flip the air strike's direction, Space to fire (hold to charge), Enter
- * (AltFire) to drop the selected weapon while on the rope, and a click on the map for the air
- * strike. With `canFire` false (retreat time) only the rope still works.
+ * cycle the fuse, flip the air strike's direction or turn the girder, Space to fire (hold to
+ * charge), Enter (AltFire) to drop the selected weapon while on the rope, parachute or jet
+ * pack, and a click on the map for the air strike, teleport and girder. With `canFire` false
+ * (retreat time) only the rope works, plus a parachute or jet pack already in use; `canUse`
+ * says whether the team may use the selected utility at all.
  */
-export function useWeapons(worm: Worm, input: WormInput, ctx: WeaponContext, canFire = true): void {
+export function useWeapons(worm: Worm, input: WormInput, ctx: WeaponContext, canFire = true, canUse = canFire): void {
   if (input.select) {
     worm.weapon = input.select;
     worm.charge = null;
@@ -271,26 +309,75 @@ export function useWeapons(worm: Worm, input: WormInput, ctx: WeaponContext, can
   if (input.fuse !== null && spec.hasFuse && FUSES.includes(input.fuse)) worm.fuse = input.fuse;
   if (input.toggle && spec.hasFuse) worm.fuse = FUSES[(FUSES.indexOf(worm.fuse) + 1) % FUSES.length];
   else if (input.toggle && spec.use === 'strike') worm.strikeDir = worm.strikeDir === 1 ? -1 : 1;
+  else if (input.toggle && worm.weapon === 'girder') worm.girderAngle = (worm.girderAngle + 1) % 8;
 
-  // On the rope (or flying after letting go), AltFire drops a weapon.
-  const roping = worm.rope?.phase === 'attached' || worm.ropeChain;
-  if (canFire && input.altFire && roping && spec.droppable) drop(worm, ctx);
+  // On the rope, parachute or jet pack (or flying after letting go of the rope), AltFire drops a weapon.
+  const flying = worm.rope?.phase === 'attached' || worm.ropeChain || worm.parachute || worm.jetpack !== null;
+  if (canFire && input.altFire && flying && spec.droppable) drop(worm, ctx);
 
-  if (canFire && input.target !== null && WEAPONS[worm.weapon].use === 'strike' && worm.grounded && !worm.rope) {
-    callStrike(worm, input.target, ctx);
+  // A parachute opens by itself once a worm holding it falls fast enough.
+  const falling = !worm.grounded && !worm.rope && worm.jetpack === null;
+  if (worm.weapon === 'parachute' && canUse && falling && !worm.parachute && worm.vy > PHYS.parachuteAutoOpen) {
+    openParachute(worm, ctx);
   }
 
+  if (canFire && input.target !== null && !worm.rope && worm.charge === null) useTarget(worm, input.target, ctx);
+
   if (worm.charge !== null) charge(worm, input, ctx);
-  else if (input.fire) pressFire(worm, ctx, canFire);
+  else if (input.fire) pressFire(worm, ctx, canFire, canUse);
 }
 
-function pressFire(worm: Worm, ctx: WeaponContext, canFire: boolean): void {
+/** Air strike, teleport and girder go where the map was clicked. */
+function useTarget(worm: Worm, target: { x: number; y: number }, ctx: WeaponContext): void {
+  if (worm.weapon === 'airstrike') {
+    if (worm.grounded) callStrike(worm, target.x, ctx);
+  } else if (worm.weapon === 'teleport') {
+    if (ctx.teleport(worm, target.x, target.y)) ctx.weaponUsed('teleport');
+  } else if (worm.weapon === 'girder') {
+    if (ctx.placeGirder(worm, target.x, target.y, girderRadians(worm.girderAngle))) ctx.weaponUsed('girder');
+  }
+}
+
+function openParachute(worm: Worm, ctx: WeaponContext): void {
+  worm.parachute = true;
+  worm.ropeChain = false;
+  worm.afterTouch = 0;
+  ctx.utilityUsed('parachute');
+}
+
+/**
+ * Space with a "self" utility: the parachute opens (in the air) or closes, the jet pack goes on
+ * or off, Skip Go ends the turn, Surrender gives up. Worm Select is the match's (it changes
+ * whose turn it is). The parachute and jet pack can be switched off whenever, but switching
+ * them on needs `canUse`.
+ */
+function useSelf(worm: Worm, ctx: WeaponContext, canFire: boolean, canUse: boolean): void {
+  if (worm.weapon === 'parachute') {
+    if (worm.parachute) worm.parachute = false;
+    else if (canUse && !worm.grounded && worm.jetpack === null) openParachute(worm, ctx);
+  } else if (worm.weapon === 'jetpack') {
+    if (worm.jetpack !== null) worm.jetpack = null;
+    else if (canUse) {
+      worm.jetpack = PHYS.jetpackFuel;
+      worm.parachute = false;
+      worm.ropeChain = false;
+      worm.pendingJump = null;
+      ctx.utilityUsed('jetpack');
+    }
+  } else if (canFire && worm.weapon === 'skipGo') {
+    ctx.utilityUsed('skipGo');
+    ctx.skipTurn();
+  } else if (canFire && worm.weapon === 'surrender') ctx.surrender(worm.team);
+}
+
+function pressFire(worm: Worm, ctx: WeaponContext, canFire: boolean, canUse: boolean): void {
   if (worm.rope?.phase === 'attached') return releaseRope(worm);
   if (worm.rope) return; // hook still flying
+  const spec = WEAPONS[worm.weapon];
+  if (spec.use === 'self') return useSelf(worm, ctx, canFire, canUse);
   // After letting go of the rope, Space shoots it again whatever is selected.
   if (worm.weapon === 'rope' || worm.ropeChain) return shootRope(worm);
   if (!canFire || !worm.grounded) return; // other weapons need solid ground
-  const spec = WEAPONS[worm.weapon];
   if (spec.use === 'throw') worm.charge = 0;
   else if (spec.use === 'place') place(worm, spec.projectile!, ctx);
   else if (spec.use === 'melee') swing(worm, MELEE[worm.weapon as keyof typeof MELEE], ctx);

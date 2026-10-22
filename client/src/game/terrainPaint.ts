@@ -121,6 +121,20 @@ export class TerrainPainter {
     return clip({ x: left, y: top, w: right - left + 1, h: bottom - top + 1 }, width, height);
   }
 
+  /**
+   * New ground was put in (a girder) inside the inclusive box: clears any old burn marks there
+   * and returns the area whose colours changed, for `paint`. Null if off the map.
+   */
+  fill(x0: number, y0: number, x1: number, y1: number): Rect | null {
+    const { width, height } = this.terrain;
+    for (let y = Math.max(0, y0); y <= Math.min(height - 1, y1); y++) {
+      this.scorch.fill(0, y * width + Math.max(0, x0), y * width + Math.min(width - 1, x1) + 1);
+    }
+    const left = x0 - REACH;
+    const top = y0 - REACH;
+    return clip({ x: left, y: top, w: x1 + REACH + SHADOW_X - left + 1, h: y1 + REACH + SHADOW_Y - top + 1 }, width, height);
+  }
+
   /** Recomputes the colours inside `rect` from the current mask. */
   paint(rect: Rect): void {
     const { width, height, mask } = this.terrain;

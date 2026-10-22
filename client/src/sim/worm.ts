@@ -25,8 +25,8 @@ export interface WormInput {
   fuse: number | null;
   /** A weapon picked from the weapon menu this tick. */
   select: WeaponId | null;
-  /** The map was clicked this tick at this x: calls in an air strike there. */
-  target: number | null;
+  /** The map was clicked this tick here: an air strike, a teleport or a girder goes there. */
+  target: Vec2 | null;
 }
 
 export const NO_INPUT: WormInput = {
@@ -80,6 +80,12 @@ export interface Worm {
   fuse: number;
   /** Which way an air strike comes in (Tab flips it): 1 from the left, -1 from the right. */
   strikeDir: 1 | -1;
+  /** A girder's angle in eighths of a half turn (Tab turns it): 0 is flat, 4 upright. */
+  girderAngle: number;
+  /** Floating down under an open parachute. */
+  parachute: boolean;
+  /** Seconds of jet pack fuel left while it's on; null when it's off. */
+  jetpack: number | null;
   /** Shot power (0..1) while Space is held; null when not charging. */
   charge: number | null;
   hp: number;
@@ -111,19 +117,26 @@ export function createWorm(id: number, name: string, team: number, x: number, y:
     weapon: 'rope',
     fuse: 3,
     strikeDir: 1,
+    girderAngle: 0,
+    parachute: false,
+    jetpack: null,
     charge: null,
     hp,
     alive: true,
   };
 }
 
-/** Advances one worm by one tick. Returns fall damage taken on landing (0 if none). */
-export function stepWorm(worm: Worm, input: WormInput, terrain: Terrain): number {
+/**
+ * Advances one worm by one tick; `wind` (-1..1) blows a parachute along. Returns fall damage
+ * taken on landing (0 if none).
+ */
+export function stepWorm(worm: Worm, input: WormInput, terrain: Terrain, wind = 0): number {
   advanceHook(worm, terrain);
   if (worm.rope?.phase === 'attached') {
     swingOnRope(worm, worm.rope, input, terrain);
     return 0;
   }
+  if (worm.jetpack !== null) return flyJetpack(worm, input, terrain);
 
   if (input.up) worm.aim = Math.min(Math.PI / 2, worm.aim + PHYS.aimSpeed * DT);
   if (input.down) worm.aim = Math.max(-Math.PI / 2, worm.aim - PHYS.aimSpeed * DT);
@@ -147,7 +160,7 @@ export function stepWorm(worm: Worm, input: WormInput, terrain: Terrain): number
     }
   }
 
-  return worm.grounded ? 0 : fly(worm, input, terrain);
+  return worm.grounded ? 0 : fly(worm, input, terrain, wind);
 }
 
 /** The first Jump press starts a crouch; another press during it turns the jump into a flip. */
@@ -208,9 +221,10 @@ function stepSideways(worm: Worm, dir: 1 | -1, terrain: Terrain): boolean {
   return false;
 }
 
-function fly(worm: Worm, input: WormInput, terrain: Terrain): number {
+function fly(worm: Worm, input: WormInput, terrain: Terrain, wind: number): number {
   worm.vy = Math.min(worm.vy + PHYS.gravity * DT, PHYS.wormMaxFallSpeed);
-  if (worm.afterTouch > 0 && input.left !== input.right) {
+  if (worm.parachute) floatDown(worm, input, wind);
+  else if (worm.afterTouch > 0 && input.left !== input.right) {
     worm.vx += (input.left ? -1 : 1) * worm.afterTouch * PHYS.gravity * DT;
   }
   pushOut(worm, PHYS.wormRadius, terrain);
@@ -255,6 +269,58 @@ function land(worm: Worm): void {
   worm.slide = 0;
   worm.afterTouch = 0;
   worm.ropeChain = false;
+  worm.parachute = false; // it folds away on landing
+}
+
+/** Under a parachute: the fall eases to a slow drift, steered with ← → and blown by the wind. */
+function floatDown(worm: Worm, input: WormInput, wind: number): void {
+  const ease = 1 - Math.exp(-6 * DT);
+  if (worm.vy > PHYS.parachuteFallSpeed) worm.vy += (PHYS.parachuteFallSpeed - worm.vy) * ease;
+  const steer = input.left === input.right ? 0 : input.left ? -1 : 1;
+  if (steer) worm.facing = steer > 0 ? 1 : -1;
+  worm.vx += steer * PHYS.parachuteSteer * DT;
+  // Without steering, it drifts toward the wind's speed.
+  if (!steer) worm.vx += (wind * PHYS.parachuteWind - worm.vx) * ease * 0.5;
+  worm.vx = Math.max(-PHYS.parachuteMaxSide, Math.min(PHYS.parachuteMaxSide, worm.vx));
+}
+
+/**
+ * On the jet pack: ↑ thrusts up, ← → sideways, burning fuel; with no fuel or no keys held it
+ * just falls. It sets down on floors and stays on, taking off again with ↑.
+ */
+function flyJetpack(worm: Worm, input: WormInput, terrain: Terrain): number {
+  const side = input.left === input.right ? 0 : input.left ? -1 : 1;
+  const fuel = worm.jetpack! > 0;
+  const up = input.up && fuel;
+  if (side) worm.facing = side > 0 ? 1 : -1;
+  if (fuel && (up || side)) worm.jetpack = Math.max(0, worm.jetpack! - DT);
+  worm.slide = 0;
+  worm.pendingJump = null;
+  if (worm.grounded) {
+    if (!up) {
+      worm.vx = 0;
+      worm.vy = 0;
+      if (terrain.discFree(worm.x, worm.y + 1, PHYS.wormRadius)) worm.grounded = false;
+      return 0;
+    }
+    worm.grounded = false;
+  }
+  worm.vy += (PHYS.gravity - (up ? PHYS.jetpackThrustUp : 0)) * DT;
+  if (fuel) worm.vx += side * PHYS.jetpackThrustSide * DT;
+  const speed = Math.hypot(worm.vx, worm.vy);
+  if (speed > PHYS.jetpackMaxSpeed) {
+    worm.vx *= PHYS.jetpackMaxSpeed / speed;
+    worm.vy *= PHYS.jetpackMaxSpeed / speed;
+  }
+  pushOut(worm, PHYS.wormRadius, terrain);
+  const n = moveDisc(worm, PHYS.wormRadius, terrain);
+  if (!n) return 0;
+  if (n.y < PHYS.floorNormalY && worm.vy >= 0) {
+    worm.vx = 0;
+    worm.vy = 0;
+    worm.grounded = true;
+  } else bounceOff(worm, n, PHYS.wallBounce);
+  return 0;
 }
 
 function startSlide(worm: Worm, speed: number): void {

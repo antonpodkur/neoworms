@@ -247,7 +247,7 @@ describe('Air strike', () => {
     run(match, 1, { select: 'airstrike' });
     expect(worm.weapon).not.toBe('airstrike');
     worm.weapon = 'airstrike'; // even if it's in hand
-    run(match, 1, { target: 1000 });
+    run(match, 1, { target: { x: 1000, y: 0 } });
     expect(match.world.projectiles).toHaveLength(0);
     expect(match.phase).toBe('playing');
   });
@@ -255,7 +255,7 @@ describe('Air strike', () => {
   it('comes down from the sky on an open map', () => {
     const match = setup(1, { scheme: 'unlimited', turnTime: 30 });
     run(match, 1, { select: 'airstrike' });
-    run(match, 1, { target: 1000 });
+    run(match, 1, { target: { x: 1000, y: 0 } });
     expect(match.world.projectiles.filter((p) => p.kind === 'missile')).toHaveLength(AIRSTRIKE.missiles);
   });
 
@@ -371,6 +371,41 @@ describe('Worms at 0 HP', () => {
     match.world.explode(b1.x, b1.y, roundBlast(10, 500, 30, 0));
     const events = untilNextTurn(match);
     expect(events).toContainEqual({ type: 'gameOver', winner: 0 });
+  });
+});
+
+describe('Turn utilities', () => {
+  it('Skip Go ends the turn at once and uses one', () => {
+    const match = setup(1, { turnTime: 30 });
+    const team = match.turnTeam;
+    const before = match.weaponStatus(team, 'skipGo').ammo!;
+    run(match, 1, { select: 'skipGo' });
+    run(match, 1, { fire: true });
+    expect(match.phase).toBe('settling');
+    expect(match.weaponStatus(team, 'skipGo').ammo).toBe(before - 1);
+  });
+
+  it('Surrender takes the team off and the other team wins', () => {
+    const match = setup(2, { turnTime: 30 });
+    run(match, 1, { select: 'surrender' });
+    run(match, 1, { fire: true });
+    const events = untilNextTurn(match);
+    expect(match.world.worms.filter((w) => w.team === 0).every((w) => !w.alive)).toBe(true);
+    expect(events).toContainEqual({ type: 'gameOver', winner: 1 });
+  });
+
+  it('Worm Select: Space starts picking, Tab moves on, Space hands the turn over', () => {
+    const match = setup(2, { turnTime: 30 });
+    expect(activeName(match)).toBe('A1');
+    run(match, 1, { select: 'wormSelect' });
+    run(match, 1, { fire: true });
+    expect(match.selecting).toBe(match.world.activeWormId);
+    run(match, 1, { toggle: true });
+    expect(match.world.worms[match.selecting!].name).toBe('A2');
+    run(match, 1, { fire: true });
+    expect(activeName(match)).toBe('A2');
+    expect(match.selecting).toBeNull();
+    expect(match.phase).toBe('playing'); // the turn goes on
   });
 });
 
