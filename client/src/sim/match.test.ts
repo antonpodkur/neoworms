@@ -457,3 +457,32 @@ describe('Ammo and delays', () => {
     expect(match.weaponStatus(1, 'banana')).toEqual({ ammo: null, wait: 0, blocked: false });
   });
 });
+
+describe('Steered weapons and guns', () => {
+  it('a sheep takes its ammo when set out, and retreat time starts when it goes off', () => {
+    const match = setup(2, { turnTime: 10 });
+    untilNextTurn(match);
+    untilNextTurn(match); // the sheep's delay: the team's second turn
+    const team = match.turnTeam;
+    expect(match.weaponStatus(team, 'sheep')).toEqual({ ammo: 1, wait: 0, blocked: false });
+    match.world.activeWorm!.weapon = 'sheep';
+    run(match, 1, { fire: true });
+    expect(match.weaponStatus(team, 'sheep').ammo).toBe(0);
+    run(match, 3 * 60); // far enough not to hurt its owner (that would end the turn)
+    expect(match.phase).toBe('playing');
+    run(match, 1, { fire: true });
+    expect(match.phase).toBe('retreat');
+    expect(match.weaponStatus(team, 'sheep').ammo).toBe(0);
+  });
+
+  it('the shotgun waits for its second shot before retreat time', () => {
+    const match = setup(2, { turnTime: 10 });
+    match.world.activeWorm!.weapon = 'shotgun';
+    run(match, 1, { fire: true });
+    run(match, 5);
+    expect(match.phase).toBe('playing');
+    run(match, 1, { fire: true });
+    run(match, 2);
+    expect(match.phase).toBe('retreat');
+  });
+});

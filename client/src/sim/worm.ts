@@ -25,7 +25,7 @@ export interface WormInput {
   fuse: number | null;
   /** A weapon picked from the weapon menu this tick. */
   select: WeaponId | null;
-  /** The map was clicked this tick here: an air strike, a teleport or a girder goes there. */
+  /** The map was clicked this tick here: an air strike, a teleport, a girder or a homing missile goes there. */
   target: Vec2 | null;
 }
 
@@ -88,6 +88,15 @@ export interface Worm {
   jetpack: number | null;
   /** Shot power (0..1) while Space is held; null when not charging. */
   charge: number | null;
+  /**
+   * A gun in use: Space presses still to come (the shotgun's second shot), bullets of the
+   * current shot left to fire and ticks until the next one. null when no gun is out.
+   */
+  gun: { shots: number; bullets: number; cooldown: number } | null;
+  /** Flying as a kamikaze: direction, pixels left to go, and the worms already hit on the way. */
+  kamikaze: { dx: number; dy: number; left: number; hit: number[] } | null;
+  /** Where the homing missile will go (clicked on the map). */
+  marker: Vec2 | null;
   hp: number;
   alive: boolean;
 }
@@ -121,6 +130,9 @@ export function createWorm(id: number, name: string, team: number, x: number, y:
     parachute: false,
     jetpack: null,
     charge: null,
+    gun: null,
+    kamikaze: null,
+    marker: null,
     hp,
     alive: true,
   };

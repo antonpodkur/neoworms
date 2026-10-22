@@ -180,6 +180,45 @@ const defaults = {
   girderLength: 80,
   girderThickness: 8,
   girderRange: 180,
+
+  /*
+   * Weapons WR's export has no numbers for (or only explosions): by feel, after Worms
+   * Armageddon's behaviour, until there's WR footage to measure.
+   */
+  /** Shotgun and Uzi bullets fly this far before they're spent. */
+  gunRange: 600,
+  /** Dragon Ball: a fireball at this speed that fizzles out after this many seconds. */
+  dragonBallSpeed: 260,
+  dragonBallLife: 0.55,
+  /** Kamikaze: the worm flies this fast and this far before it blows up. */
+  kamikazeSpeed: 300,
+  kamikazeRange: 260,
+  /** ...hitting worms on its way for this much. */
+  kamikazeHitDamage: 30,
+  /** Homing missile: flies like a bazooka shell for a moment, then turns to its target. */
+  homingDelay: 0.35,
+  homingSpeed: 380,
+  /** Radians per second it can turn. */
+  homingTurn: 4,
+  /** After this many seconds it gives up and falls. */
+  homingLife: 6,
+  /** Petrol bomb fires burn this long (a random time in the range), hurting worms they touch. */
+  flameLifeMin: 3.5,
+  flameLifeMax: 6.5,
+  /** A worm this close to a flame (centre to centre) burns... */
+  flameReach: 11,
+  /** ...losing this much every this many seconds. */
+  flameDamage: 2,
+  flameTick: 0.25,
+  /** Sheep: walks at this speed, hops every this many seconds; goes off after the fuse or on Space. */
+  sheepSpeed: 45,
+  sheepHopEvery: 0.9,
+  sheepHop: 150,
+  sheepFuse: 8,
+  /** Super Sheep: once it takes off it flies at this speed, ← → turning it, for this long. */
+  superSheepSpeed: 260,
+  superSheepTurn: 3.2,
+  superSheepFlight: 8,
 };
 
 export type Physics = typeof defaults;

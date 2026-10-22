@@ -222,7 +222,7 @@ export class Match {
 
   private onWorldEvent(e: SimEvent): void {
     this.events.push(e);
-    if (e.type === 'weaponUsed' || e.type === 'utilityUsed') {
+    if ((e.type === 'weaponUsed' && !e.ammoTaken) || e.type === 'utilityUsed') {
       const left = this.ammo[this.turnTeam]?.[e.weapon];
       if (left != null) this.ammo[this.turnTeam][e.weapon] = Math.max(0, left - 1);
     }
@@ -292,6 +292,7 @@ export class Match {
     if (worm) {
       worm.rope = null; // let go; it falls with everything else
       worm.charge = null;
+      worm.gun = null; // a shotgun's second shot is lost
       worm.pendingJump = null;
       worm.jetpack = null; // the jet pack cuts out; a parachute stays open until it lands
     }

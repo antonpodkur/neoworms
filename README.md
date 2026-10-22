@@ -62,12 +62,14 @@ Worms Revolution's PC defaults.
 | F1–F5 / F6–F10 | Quick Select: pick from a weapon row / utility row of the panel without opening it; press again for the next in the row |
 | 1–5 | fuse in seconds for the grenade, cluster and banana bombs |
 | Tab | Toggle: cycle the fuse, flip the air strike's direction, turn the girder, or pick the next worm for Worm Select |
-| Click the map | Air Strike, Teleport or Girder: use it there |
+| Click the map | Air Strike, Teleport or Girder: use it there. Homing Missile: set its target (then Space to fire) |
+| Space with a gun | Shotgun: two shots (Space again for the second); Uzi: a burst of 25 bullets. ↑ ↓ aim and ← → turn between shots |
+| Space with a sheep out | Sheep: blow it up. Super Sheep: take off, ← → steer, Space again to blow it up. The turn goes on until it does |
 | Space with a utility | Parachute: open / close (it also opens by itself on a long fall; ← → steer). Jet Pack: on / off (↑ ← → fly while there's fuel). Skip Go: end the turn. Surrender: give up. Worm Select: start picking, Tab for the next worm, Space again to switch |
 | Space with the rope | shoot the rope / let go / shoot again mid-air |
 | ← → on rope | swing |
 | ↑ ↓ on rope | climb / descend |
-| Enter on the rope, parachute or jet pack | AltFire: drop the selected grenade, cluster or banana bomb, dynamite or mine |
+| Enter on the rope, parachute or jet pack | AltFire: drop the selected grenade, cluster or banana bomb, petrol bomb, holy hand grenade, dynamite or mine |
 | Mouse wheel | zoom |
 | Right drag / Alt + drag | pan |
 | Esc | menu: pause, resume, new match |

@@ -32,6 +32,14 @@ export function teleportFlash(scene: Phaser.Scene, x: number, y: number, arrivin
   });
 }
 
+/** A bullet's streak from the gun to where it hit, fading fast. */
+export function tracer(scene: Phaser.Scene, x0: number, y0: number, x1: number, y1: number): void {
+  const g = scene.add.graphics().setDepth(DEPTH.effects);
+  g.lineStyle(1.5, 0xfff1a8, 0.9);
+  g.lineBetween(x0, y0, x1, y1);
+  scene.tweens.add({ targets: g, alpha: 0, duration: 160, onComplete: () => g.destroy() });
+}
+
 /** Text that drifts up and fades out, e.g. damage numbers. */
 export function floatingText(scene: Phaser.Scene, x: number, y: number, text: string, color: number): void {
   const t = scene.add

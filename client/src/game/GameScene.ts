@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { DT, PHYS, TICK_RATE } from '../sim/constants';
 import { generateMap, mapFromImage, type GeneratedMap } from '../sim/mapgen';
 import { createMatch, type Match, type MatchEvent, type MatchSettings } from '../sim/match';
+import { KINDS } from '../sim/projectiles';
 import { randomSeed } from '../sim/rng';
 import { girderRadians, QUICK_SELECT, WEAPONS, type WeaponId, type WeaponStatus } from '../sim/weapons';
 import type { World } from '../sim/world';
@@ -17,7 +18,7 @@ import {
 } from '../net/OnlineSession';
 import { BackdropView } from './BackdropView';
 import { DEPTH } from './depth';
-import { floatingText, splash, teleportFlash } from './effects';
+import { floatingText, splash, teleportFlash, tracer } from './effects';
 import { Explosions } from './explosions';
 import { Hud } from './Hud';
 import { findMap, imageScale, MAPS, type MapEntry } from './maps';
@@ -493,6 +494,9 @@ export class GameScene extends Phaser.Scene {
         case 'surrender':
           this.hud.showBanner(`${this.settings.teams[e.team]} surrenders!`, teamColorCss(e.team), 2500);
           break;
+        case 'shot':
+          tracer(this, e.x0, e.y0, e.x1, e.y1);
+          break;
         case 'hit':
           floatingText(this, e.x, e.y - 20, e.landed ? 'WHACK!' : 'whoosh', e.landed ? 0xffe14d : 0xcccccc);
           if (e.landed) this.cameras.main.shake(120, 0.004);
@@ -595,13 +599,13 @@ export class GameScene extends Phaser.Scene {
     onPress('T', toggleTuningPanel);
 
     this.input.mouse?.disableContextMenu();
-    // Air strike: a left click on the map calls it in there.
+    // Air strike, teleport, girder: a left click on the map uses it there; it also sets the homing missile's target.
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       if (!p.leftButtonDown() || p.event.altKey || this.weaponPanel.isOpen) return;
       const worm = this.match.activeWorm;
       const mine = !this.online || this.isRunningGame();
-      const use = worm && WEAPONS[worm.weapon].use;
-      if (!worm || !mine || (use !== 'strike' && use !== 'target')) return;
+      const spec = worm && WEAPONS[worm.weapon];
+      if (!worm || !mine || !spec || (spec.use !== 'strike' && spec.use !== 'target' && !spec.needsTarget)) return;
       const at = this.cameras.main.getWorldPoint(p.x, p.y);
       this.pickedTarget = { x: Math.round(at.x), y: Math.round(at.y) };
       this.followActive = true;
@@ -691,12 +695,14 @@ export class GameScene extends Phaser.Scene {
       g.strokeTriangle(picking.x - 6, py - 9, picking.x + 6, py - 9, picking.x, py);
     }
 
-    // While hanging on the rope, ↑ ↓ climb instead of aiming.
+    // While hanging on the rope, ↑ ↓ climb instead of aiming; while a sheep is out, they steer it.
     if (worm.rope?.phase === 'attached') return;
+    if (this.world.projectiles.some((p) => p.owner === worm.id && KINDS[p.kind].remote)) return;
     const use = WEAPONS[worm.weapon].use;
     if (use === 'strike') return this.drawStrikeTarget(g, worm);
     if (use === 'target') return this.drawPlacement(g, worm);
     if (use === 'self') return;
+    if (worm.marker && WEAPONS[worm.weapon].needsTarget) this.drawMarker(g, worm.marker.x, worm.marker.y, time);
     const cx = view.x + Math.cos(worm.aim) * worm.facing * AIM_DISTANCE;
     const cy = view.y - Math.sin(worm.aim) * AIM_DISTANCE;
     g.lineStyle(2, 0xff3b3b, 1);
@@ -791,6 +797,18 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** The homing missile's target: a spinning cross where the map was clicked. */
+  private drawMarker(g: Phaser.GameObjects.Graphics, x: number, y: number, time: number): void {
+    const a = time / 400;
+    g.lineStyle(2, 0x5db8ff, 1);
+    g.strokeCircle(x, y, 8);
+    for (let i = 0; i < 4; i++) {
+      const c = Math.cos(a + (i * Math.PI) / 2);
+      const s = Math.sin(a + (i * Math.PI) / 2);
+      g.lineBetween(x + c * 5, y + s * 5, x + c * 13, y + s * 13);
+    }
+  }
+
   /** Air strike: a target where the pointer's column meets the ground, arrows the way it comes in. */
   private drawStrikeTarget(g: Phaser.GameObjects.Graphics, worm: Worm): void {
     const pointer = this.input.activePointer;
@@ -850,6 +868,9 @@ function weaponLabel(worm: Worm, status: WeaponStatus): string {
   if (worm.weapon === 'girder') return `${weapon.name}${ammo} (click the map, Tab turns it)`;
   if (weapon.use === 'strike' || weapon.use === 'target') return `${weapon.name}${ammo} (click the map)`;
   if (worm.weapon === 'wormSelect') return `${weapon.name}${ammo} (Space, Tab, Space)`;
+  if (weapon.needsTarget) return `${weapon.name}${ammo} (${worm.marker ? 'Space to fire' : 'click the target'})`;
+  if (worm.gun && worm.gun.bullets === 0) return `${weapon.name} (Space: next shot)`;
+  if (weapon.remote) return `${weapon.name}${ammo} (Space again sets it off${worm.weapon === 'superSheep' ? ' / takes off' : ''})`;
   return `${weapon.name}${ammo}`;
 }
 

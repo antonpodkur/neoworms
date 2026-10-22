@@ -3,6 +3,9 @@ import { TICK_RATE } from '../sim/constants';
 import type { Projectile } from '../sim/projectiles';
 import { labelStyle } from './WormView';
 
+/** Kinds whose countdown isn't shown: mines have their light, the rest just burn out. */
+const NO_FUSE_LABEL = new Set<Projectile['kind']>(['mine', 'flame', 'dragonBall']);
+
 /** Draws every kind of projectile, fuse countdowns over the fused ones, and mine lights. */
 export class ProjectileView {
   private readonly gfx: Phaser.GameObjects.Graphics;
@@ -54,8 +57,27 @@ export class ProjectileView {
         case 'mine':
           drawMine(g, x, y, p, time);
           break;
+        case 'petrol':
+          drawBottle(g, x, y, time);
+          break;
+        case 'flame':
+          drawFlame(g, x, y, p, time);
+          break;
+        case 'homing':
+          drawShell(g, x, y, p, 0x1f4e8c);
+          break;
+        case 'dragonBall':
+          drawDragonBall(g, x, y, time);
+          break;
+        case 'holy':
+          drawHoly(g, x, y);
+          break;
+        case 'sheep':
+        case 'superSheep':
+          drawSheep(g, x, y, p);
+          break;
       }
-      if (p.kind !== 'mine' && p.fuseTicks !== null) {
+      if (!NO_FUSE_LABEL.has(p.kind) && p.fuseTicks !== null) {
         this.showFuse(p, x, y);
         live.add(p.id);
       }
@@ -149,4 +171,69 @@ function drawMine(g: Phaser.GameObjects.Graphics, x: number, y: number, p: Proje
     g.fillStyle(0xff2b2b, 1);
     g.fillCircle(x, y - 2, 1.6);
   }
+}
+
+/** A spinning bottle with a burning rag. */
+function drawBottle(g: Phaser.GameObjects.Graphics, x: number, y: number, time: number): void {
+  const a = time / 90;
+  const dx = Math.cos(a);
+  const dy = Math.sin(a);
+  g.lineStyle(5, 0x2f6b3a, 1);
+  g.lineBetween(x - dx * 3, y - dy * 3, x + dx * 2, y + dy * 2);
+  g.lineStyle(2, 0x2f6b3a, 1);
+  g.lineBetween(x + dx * 2, y + dy * 2, x + dx * 5, y + dy * 5);
+  g.fillStyle(0xffb347, 0.9);
+  g.fillCircle(x + dx * 6, y + dy * 6, 1.8 + Math.sin(time / 40));
+}
+
+/** A licking flame that shrinks as it burns out. */
+function drawFlame(g: Phaser.GameObjects.Graphics, x: number, y: number, p: Projectile, time: number): void {
+  const left = Math.min(1, (p.fuseTicks ?? 0) / (TICK_RATE * 1.5));
+  const h = (5 + Math.sin(time / 50 + p.id) * 1.5) * (0.4 + 0.6 * left);
+  g.fillStyle(0xff5a1f, 0.9);
+  g.fillTriangle(x - 3, y + 2, x + 3, y + 2, x + Math.sin(time / 70 + p.id) * 1.5, y + 2 - h * 1.6);
+  g.fillStyle(0xffd23b, 0.95);
+  g.fillTriangle(x - 1.5, y + 2, x + 1.5, y + 2, x, y + 2 - h);
+}
+
+/** A glowing ball of fire. */
+function drawDragonBall(g: Phaser.GameObjects.Graphics, x: number, y: number, time: number): void {
+  g.fillStyle(0xff7a1a, 0.35);
+  g.fillCircle(x, y, 7 + Math.sin(time / 40));
+  g.fillStyle(0xffb347, 1);
+  g.fillCircle(x, y, 4.5);
+  g.fillStyle(0xfff1a8, 1);
+  g.fillCircle(x, y, 2.2);
+}
+
+/** A golden orb with a cross on top. */
+function drawHoly(g: Phaser.GameObjects.Graphics, x: number, y: number): void {
+  g.fillStyle(0x7a5a10, 1);
+  g.fillCircle(x, y, 4.5);
+  g.fillStyle(0xf2c230, 1);
+  g.fillCircle(x, y, 3.5);
+  g.lineStyle(1.5, 0xf2c230, 1);
+  g.lineBetween(x, y - 4, x, y - 10);
+  g.lineBetween(x - 2.5, y - 8, x + 2.5, y - 8);
+}
+
+/** A woolly sheep facing the way it walks; a super sheep in flight wears a red cape. */
+function drawSheep(g: Phaser.GameObjects.Graphics, x: number, y: number, p: Projectile): void {
+  const flying = p.heading !== null;
+  const dir = flying ? (Math.cos(p.heading!) < 0 ? -1 : 1) : p.dir;
+  if (flying) {
+    g.fillStyle(0xd62828, 1);
+    g.fillTriangle(x - dir * 2, y - 3, x - dir * 12, y - 6, x - dir * 10, y + 3);
+  }
+  g.fillStyle(0x2b2b2b, 1);
+  if (!flying) {
+    g.fillRect(x - 4, y + 2, 1.5, 4);
+    g.fillRect(x + 2.5, y + 2, 1.5, 4);
+  }
+  g.fillStyle(0xf4f4f0, 1);
+  g.fillCircle(x - 2, y, 4);
+  g.fillCircle(x + 2, y, 4);
+  g.fillCircle(x, y - 2, 4);
+  g.fillStyle(0x2b2b2b, 1);
+  g.fillEllipse(x + dir * 6, y - 2, 5, 4);
 }

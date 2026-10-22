@@ -574,3 +574,188 @@ describe('Girder', () => {
     expect(world.terrain.isSolid(worm.x, worm.y)).toBe(false);
   });
 });
+
+describe('Shotgun', () => {
+  it('fires two shots of 25, and only the second one ends the shooting', () => {
+    const world = groundWorld();
+    standingWorm(world, 200, 'shotgun');
+    const target = world.addWorm('T', 1, 300, restingY(GROUND));
+    run(world, 5);
+    let events = run(world, 1, { fire: true });
+    events.push(...run(world, 2));
+    expect(target.hp).toBe(100 - BLASTS.shotgun.damage[1]);
+    expect(events).toContainEqual(expect.objectContaining({ type: 'shot' }));
+    expect(events.some((e) => e.type === 'weaponUsed')).toBe(false);
+    run(world, 120); // let the target land
+    events = run(world, 1, { fire: true });
+    events.push(...run(world, 2));
+    expect(events.filter((e) => e.type === 'weaponUsed')).toHaveLength(1);
+    expect(events.filter((e) => e.type === 'shot')).toHaveLength(1);
+  });
+
+  it('keeps the shooter on the spot between shots', () => {
+    const world = groundWorld();
+    const worm = standingWorm(world, 200, 'shotgun');
+    run(world, 1, { fire: true });
+    run(world, 2);
+    const x = worm.x;
+    run(world, 30, { right: true });
+    expect(worm.x).toBe(x);
+  });
+});
+
+describe('Uzi', () => {
+  it('sprays a burst of bullets, then counts as used', () => {
+    const world = groundWorld();
+    standingWorm(world, 200, 'uzi');
+    const target = world.addWorm('T', 1, 260, restingY(GROUND));
+    run(world, 5);
+    const events = run(world, 1, { fire: true });
+    events.push(...run(world, 120));
+    expect(events.filter((e) => e.type === 'shot')).toHaveLength(25);
+    expect(events.filter((e) => e.type === 'weaponUsed')).toHaveLength(1);
+    expect(target.hp).toBeLessThan(80);
+  });
+});
+
+describe('Fire Punch and Dragon Ball', () => {
+  it('the fire punch hurts the worm in front and the puncher leaps up', () => {
+    const world = groundWorld();
+    const puncher = standingWorm(world, 200, 'firePunch');
+    const target = world.addWorm('T', 1, 214, restingY(GROUND));
+    run(world, 5);
+    run(world, 1, { fire: true });
+    expect(target.hp).toBe(100 - MELEE.firePunch.damage);
+    expect(target.vy).toBeLessThan(0);
+    expect(puncher.grounded).toBe(false);
+    expect(puncher.vy).toBeLessThan(0);
+  });
+
+  it('the dragon ball hits a worm a little way off and fizzles out further away', () => {
+    const world = groundWorld();
+    standingWorm(world, 200, 'dragonBall');
+    const near = world.addWorm('N', 1, 280, restingY(GROUND));
+    run(world, 5);
+    run(world, 1, { fire: true });
+    run(world, 60);
+    expect(near.hp).toBe(100 - BLASTS.dragonBall.damage[1]);
+
+    const empty = groundWorld();
+    standingWorm(empty, 200, 'dragonBall');
+    run(empty, 1, { fire: true });
+    const events = run(empty, 120);
+    expect(events.some((e) => e.type === 'explosion')).toBe(false);
+    expect(empty.projectiles).toHaveLength(0);
+  });
+});
+
+describe('Kamikaze', () => {
+  it('flies along the aim, knocks a worm on the way, and blows up at a wall', () => {
+    const world = groundWorld();
+    for (let y = 0; y < GROUND; y++) for (let x = 400; x < 420; x++) world.terrain.mask[y * 1200 + x] = 1; // a wall
+    const worm = standingWorm(world, 200, 'kamikaze');
+    worm.aim = 0.05;
+    const inWay = world.addWorm('T', 1, 300, restingY(GROUND));
+    run(world, 5);
+    const events = run(world, 1, { fire: true });
+    events.push(...run(world, 90));
+    expect(inWay.hp).toBeLessThanOrEqual(100 - PHYS.kamikazeHitDamage);
+    expect(worm.alive).toBe(false);
+    const boom = events.find((e) => e.type === 'explosion') as Extract<SimEvent, { type: 'explosion' }>;
+    expect(boom.x).toBeGreaterThan(380);
+    expect(boom.x).toBeLessThan(400);
+  });
+});
+
+describe('Homing missile', () => {
+  it('needs a target, then turns toward it after a moment', () => {
+    const world = groundWorld();
+    const worm = standingWorm(world, 200, 'homing');
+    run(world, 1, { fire: true });
+    expect(worm.charge).toBeNull(); // no target yet
+    run(world, 1, { target: { x: 700, y: GROUND - 5 } });
+    expect(worm.marker).toEqual({ x: 700, y: GROUND - 5 });
+    worm.aim = Math.PI / 3; // fired steeply up and away
+    chargeAndFire(world, 40);
+    const boom = untilExplosion(world);
+    expect(boom).not.toBeNull();
+    expect(Math.hypot(boom!.x - 700, boom!.y - GROUND)).toBeLessThan(30);
+    expect(worm.marker).toBeNull();
+  });
+});
+
+describe('Holy Hand Grenade', () => {
+  it('goes off after 3 seconds with a huge blast', () => {
+    const world = groundWorld();
+    standingWorm(world, 200, 'holy');
+    run(world, 1, { fuse: 5 }); // it has no fuse to set
+    chargeAndFire(world, 10);
+    const boom = untilExplosion(world);
+    expect(Math.abs(boom!.ticks - 3 * 60)).toBeLessThanOrEqual(1); // it ticks once as it leaves the worm
+    expect(boom!.r).toBe(BLASTS.holy.radius);
+    expect(BLASTS.holy.radius).toBeGreaterThan(BLASTS.oldWoman.radius);
+  });
+});
+
+describe('Petrol bomb', () => {
+  it('bursts into flames that burn a worm standing in them, then go out', () => {
+    const world = groundWorld();
+    standingWorm(world, 200, 'petrol');
+    const victim = world.addWorm('V', 1, 320, restingY(GROUND));
+    run(world, 5);
+    // Dropped to land at the victim's feet.
+    world.spawn({ kind: 'petrol', x: 330, y: GROUND - 60, vx: 0, vy: 50 });
+    run(world, 60);
+    expect(world.projectiles.filter((p) => p.kind === 'flame').length).toBeGreaterThan(0);
+    const hp = victim.hp;
+    run(world, 60);
+    expect(victim.hp).toBeLessThan(hp);
+    // However many flames it stands in, a worm burns once per flame tick.
+    expect(hp - victim.hp).toBeLessThanOrEqual(PHYS.flameDamage * (1 + 1 / PHYS.flameTick));
+    run(world, Math.ceil(PHYS.flameLifeMax * 60));
+    expect(world.projectiles).toHaveLength(0);
+  });
+});
+
+describe('Sheep', () => {
+  it('walks off while its owner stands still; Space blows it up, and only then is the weapon used', () => {
+    const world = groundWorld();
+    const worm = standingWorm(world, 200, 'sheep');
+    let events = run(world, 1, { fire: true });
+    expect(events).toContainEqual({ type: 'utilityUsed', weapon: 'sheep' });
+    const sheep = world.projectiles.find((p) => p.kind === 'sheep')!;
+    const x = worm.x;
+    events = run(world, 90, { right: true });
+    expect(worm.x).toBe(x);
+    expect(sheep.x).toBeGreaterThan(x + 40);
+    expect(events.some((e) => e.type === 'weaponUsed')).toBe(false);
+    events = run(world, 1, { fire: true });
+    expect(events).toContainEqual(expect.objectContaining({ type: 'explosion' }));
+    expect(events).toContainEqual({ type: 'weaponUsed', weapon: 'sheep', ammoTaken: true });
+  });
+
+  it('goes off by itself when its fuse runs out', () => {
+    const world = groundWorld();
+    standingWorm(world, 200, 'sheep');
+    run(world, 1, { fire: true });
+    const boom = untilExplosion(world, PHYS.sheepFuse * 60 + 5);
+    expect(boom!.ticks).toBeGreaterThan(PHYS.sheepFuse * 60 - 5);
+  });
+
+  it('a super sheep takes off on Space, turns with ← →, and blows up on Space again', () => {
+    const world = groundWorld();
+    standingWorm(world, 200, 'superSheep');
+    run(world, 1, { fire: true });
+    run(world, 20);
+    const sheep = world.projectiles.find((p) => p.kind === 'superSheep')!;
+    run(world, 1, { fire: true });
+    expect(sheep.heading).toBeCloseTo(-Math.PI / 2);
+    const y = sheep.y;
+    run(world, 20, { right: true });
+    expect(sheep.y).toBeLessThan(y - 30);
+    expect(sheep.heading!).toBeGreaterThan(-Math.PI / 2);
+    const events = run(world, 1, { fire: true });
+    expect(events).toContainEqual(expect.objectContaining({ type: 'explosion' }));
+    expect(world.projectiles).toHaveLength(0);
+  });
+});

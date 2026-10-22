@@ -1,9 +1,12 @@
-import { PHYS } from './constants';
+import { DT, PHYS, TICK_RATE } from './constants';
 import { findSpawnPoints, isMirrored, type GeneratedMap } from './mapgen';
 import {
   blastProjectile,
   createProjectile,
+  KINDS,
+  steerProjectile,
   stepProjectile,
+  triggerProjectile,
   type Launch,
   type Projectile,
   type ProjectileContext,
@@ -26,7 +29,10 @@ export type SimEvent =
   | { type: 'mineTriggered'; id: number }
   | { type: 'dud'; x: number; y: number }
   | { type: 'hit'; x: number; y: number; landed: boolean }
-  | { type: 'weaponUsed'; weapon: WeaponId }
+  /** A weapon was used: retreat time starts. `ammoTaken`: its ammo went when it was set out (sheep). */
+  | { type: 'weaponUsed'; weapon: WeaponId; ammoTaken?: boolean }
+  /** A bullet's path, for the tracer. */
+  | { type: 'shot'; x0: number; y0: number; x1: number; y1: number }
   /** A utility was used without ending the turn (parachute, jet pack, skip go, worm select). */
   | { type: 'utilityUsed'; weapon: WeaponId }
   | { type: 'teleport'; wormId: number; fromX: number; fromY: number }
@@ -64,6 +70,8 @@ export class World implements ProjectileContext, WeaponContext {
   wind = 0;
   tick = 0;
   private events: SimEvent[] = [];
+  /** When each worm last took a burn (flames hurt it at most once per PHYS.flameTick). */
+  private readonly lastBurn = new Map<number, number>();
   private nextProjectileId = 0;
   private rngState: number;
 
@@ -128,14 +136,23 @@ export class World implements ProjectileContext, WeaponContext {
   step(input: WormInput, canFire = true, canUse = canFire): void {
     this.tick++;
     const active = this.activeWorm;
-    if (active) useWeapons(active, input, this, canFire, canUse);
+    // While its sheep is out, the worm's keys steer the sheep instead.
+    const pet = active && this.projectiles.find((p) => !p.dead && p.owner === active.id && KINDS[p.kind].remote);
+    if (pet) {
+      if (input.fire) triggerProjectile(pet, this);
+      else steerProjectile(pet, (input.right ? 1 : 0) - (input.left ? 1 : 0));
+    } else if (active) useWeapons(active, input, this, canFire, canUse);
 
     for (const worm of this.worms) {
       if (!worm.alive) continue;
       worm.prevX = worm.x;
       worm.prevY = worm.y;
-      let wormInput = worm === active ? input : NO_INPUT;
-      if (worm.charge !== null) wormInput = { ...wormInput, ...CHARGING_LOCK };
+      if (worm.kamikaze) {
+        this.flyKamikaze(worm);
+        continue;
+      }
+      let wormInput = worm === active && !pet ? input : NO_INPUT;
+      if (worm.charge !== null || worm.gun) wormInput = { ...wormInput, ...CHARGING_LOCK };
       const fallDamage = stepWorm(worm, wormInput, this.terrain, this.wind);
       if (fallDamage > 0) this.damage(worm, fallDamage);
       if (worm.alive && worm.y - PHYS.wormRadius > this.waterLevel) this.kill(worm, 'drowned');
@@ -147,6 +164,48 @@ export class World implements ProjectileContext, WeaponContext {
 
   spawn(launch: Launch): void {
     this.projectiles.push(createProjectile(this.nextProjectileId++, launch));
+  }
+
+  /**
+   * A bullet: travels pixel by pixel until it hits ground or a worm (not the shooter), leaves
+   * the map or runs out of range, and goes off there.
+   */
+  shoot(shooter: Worm, x: number, y: number, dirX: number, dirY: number, blast: Blast): void {
+    const { width, height } = this.terrain;
+    let hit = false;
+    let bx = x;
+    let by = y;
+    for (let d = 0; d < PHYS.gunRange; d++) {
+      bx = x + dirX * d;
+      by = y + dirY * d;
+      if (bx < 0 || bx >= width || by >= this.waterLevel || by >= height) break;
+      const onWorm = this.worms.some(
+        (w) => w.alive && w !== shooter && Math.hypot(w.x - bx, w.y - by) < PHYS.wormRadius,
+      );
+      if (onWorm || this.terrain.isSolid(Math.round(bx), Math.round(by))) {
+        hit = true;
+        break;
+      }
+    }
+    this.events.push({ type: 'shot', x0: x, y0: y, x1: bx, y1: by });
+    if (hit) this.explode(bx, by, blast, Math.sign(dirX) || undefined);
+  }
+
+  /**
+   * A flame burns the worms close to it, each at most once per PHYS.flameTick however many
+   * flames it stands in; with `dig` it also eats a little of the ground under it.
+   */
+  burn(x: number, y: number, dig: boolean): void {
+    const every = Math.round(PHYS.flameTick * TICK_RATE);
+    for (const worm of this.worms) {
+      if (!worm.alive || Math.hypot(worm.x - x, worm.y - y) >= PHYS.flameReach) continue;
+      if (this.tick - (this.lastBurn.get(worm.id) ?? -Infinity) < every) continue;
+      this.lastBurn.set(worm.id, this.tick);
+      this.damage(worm, PHYS.flameDamage);
+    }
+    if (!dig) return;
+    this.terrain.carve(x, y + 1, 2);
+    this.events.push({ type: 'carve', x, y: y + 1, r: 2 });
   }
 
   weaponUsed(weapon: WeaponId): void {
@@ -256,12 +315,15 @@ export class World implements ProjectileContext, WeaponContext {
    * it is knocked along the swing and takes the weapon's damage.
    */
   hit(attacker: Worm, dirX: number, dirY: number, melee: Melee): void {
+    // Aimed swings hit along the aim; pokes and punches hit whatever is in front.
+    const lookX = melee.aimed ? dirX : attacker.facing;
+    const lookY = melee.aimed ? dirY : 0;
     const inFront = (w: Worm) => {
       const dx = w.x - attacker.x;
       const dy = w.y - attacker.y;
       const dist = Math.hypot(dx, dy);
-      // Within reach, and no more than ~60° off the line of the swing.
-      return dist < melee.reach && dx * dirX + dy * dirY > dist * 0.5;
+      // Within reach, and no more than ~60° off that line.
+      return dist < melee.reach && dx * lookX + dy * lookY > dist * 0.5;
     };
     const target = this.worms.find((w) => w.alive && w !== attacker && inFront(w));
     const at = target ?? { x: attacker.x + dirX * melee.reach, y: attacker.y + dirY * melee.reach };
@@ -270,6 +332,40 @@ export class World implements ProjectileContext, WeaponContext {
     const speed = (PHYS.blastKnockback * melee.push) / BAZOOKA_PUSH;
     this.throwWorm(target, dirX * speed, dirY * speed - PHYS.blastLift * (melee.push / BAZOOKA_PUSH));
     if (melee.damage > 0) this.damage(target, melee.damage);
+  }
+
+  /**
+   * A kamikaze worm flies along its line a pixel at a time, knocking aside the worms it meets,
+   * and blows up (itself included) when it hits ground, leaves the map or has gone its distance.
+   */
+  private flyKamikaze(worm: Worm): void {
+    const k = worm.kamikaze!;
+    const r = PHYS.wormRadius;
+    const speed = PHYS.kamikazeSpeed;
+    worm.vx = k.dx * speed;
+    worm.vy = k.dy * speed;
+    for (let i = Math.ceil(speed * DT); i > 0; i--) {
+      const nx = worm.x + k.dx;
+      const ny = worm.y + k.dy;
+      const outside = nx < r || nx > this.terrain.width - r || ny > this.waterLevel;
+      if (--k.left <= 0 || outside || !this.terrain.discFree(nx, ny, r)) return this.blowUpKamikaze(worm);
+      worm.x = nx;
+      worm.y = ny;
+      for (const other of this.worms) {
+        if (!other.alive || other === worm || k.hit.includes(other.id)) continue;
+        if (Math.hypot(other.x - nx, other.y - ny) >= r * 2) continue;
+        k.hit.push(other.id);
+        const push = PHYS.blastKnockback * 0.6;
+        this.throwWorm(other, k.dx * push, k.dy * push - PHYS.blastLift);
+        this.damage(other, PHYS.kamikazeHitDamage);
+      }
+    }
+  }
+
+  private blowUpKamikaze(worm: Worm): void {
+    worm.kamikaze = null;
+    this.kill(worm, 'killed');
+    this.explode(worm.x, worm.y, BLASTS.kamikaze, Math.sign(worm.vx) || undefined);
   }
 
   /** The first ground from the top in column x, or the water if there's none. */
@@ -315,6 +411,7 @@ export class World implements ProjectileContext, WeaponContext {
     worm.rope = null; // blasts knock worms off their rope
     worm.parachute = false;
     worm.jetpack = null;
+    worm.kamikaze = null;
   }
 
   /** A worm brought to 0 HP stays on the map until the turn ends, then blows up. */
@@ -327,6 +424,8 @@ export class World implements ProjectileContext, WeaponContext {
     worm.alive = false;
     worm.rope = null;
     worm.charge = null;
+    worm.gun = null;
+    worm.kamikaze = null;
     this.events.push({ type: 'death', wormId: worm.id, cause });
   }
 }

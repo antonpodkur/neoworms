@@ -43,6 +43,8 @@ Each milestone ends with something playable.
   - [ ] Later: rejoin after a page reload, spectators, chat
 - [ ] **6 · Maps & content**: themes, import a map from an image, more weapons, crates, barrels
   - [x] Utilities: Parachute, Jet Pack, Teleport, Girder, Skip Go, Surrender, Worm Select (numbers by feel; WR's ammo counts)
+  - [x] Weapons: Shotgun, Uzi, Fire Punch, Dragon Ball, Kamikaze, Homing Missile, Holy Hand Grenade, Petrol Bomb, Sheep, Super Sheep (WR rows where the export has them, the rest by feel)
+  - [ ] Still to make: Water Bomb, Water Gun, Water Strike, Sentry Gun, Bunker Buster, Boggy B, Mole, Concrete Donkey, the flamethrower slot; utilities Blow Torch, Pneumatic Drill, Wrench, Telekinesis, UFO, Electromagnet, Plug Hole, Teleshield, Stick Up
   - [x] Up to 8 teams (hot-seat and online); our own maps, 4 for 2–4 teams and 3 for 5–8 teams, drawn as mirrored SVGs and built to PNG ([docs/maps.md](docs/maps.md)); worms and mines start in mirrored pairs on symmetric maps
   - [ ] Playtest the maps and tune them (rope reach, spawn spots, how long the terrain lasts)
   - [ ] Later: themes (soil/stone textures, backdrops), more maps

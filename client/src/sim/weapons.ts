@@ -8,10 +8,20 @@ export type WeaponId =
   | 'bazooka'
   | 'grenade'
   | 'cluster'
+  | 'petrol'
+  | 'homing'
   | 'banana'
+  | 'firePunch'
+  | 'dragonBall'
+  | 'kamikaze'
+  | 'shotgun'
+  | 'uzi'
+  | 'holy'
   | 'dynamite'
   | 'mine'
   | 'oldWoman'
+  | 'sheep'
+  | 'superSheep'
   | 'airstrike'
   | 'bat'
   | 'prod'
@@ -45,18 +55,37 @@ export interface Blast {
  * front of the worm. melee: hits a worm next to it. strike: click the map to call it in from
  * the sky (needs open sky). target: click the map to use it there (teleport, girder). self:
  * Space uses it on the worm or the turn (parachute, jet pack, skip go, surrender, worm select).
+ * shoot: Space fires it straight along the aim at once (Dragon Ball). gun: Space fires bullets
+ * (Shotgun, Uzi). kamikaze: Space sends the worm itself flying along the aim.
  */
-export type WeaponUse = 'rope' | 'throw' | 'place' | 'melee' | 'strike' | 'target' | 'self';
+export type WeaponUse =
+  | 'rope'
+  | 'throw'
+  | 'place'
+  | 'melee'
+  | 'strike'
+  | 'target'
+  | 'self'
+  | 'shoot'
+  | 'gun'
+  | 'kamikaze';
 
 export interface WeaponSpec {
   name: string;
   use: WeaponUse;
-  /** What it launches (throw, place and strike weapons). */
+  /** What it launches (throw, place, shoot and strike weapons). */
   projectile?: ProjectileKind;
   /** Can be dropped with Enter while on the ninja rope. */
   droppable: boolean;
   /** Tab (Toggle) cycles its fuse. */
   hasFuse: boolean;
+  /** Needs a click on the map first (the homing missile's target). */
+  needsTarget?: boolean;
+  /**
+   * Steered by its owner once it's out (sheep): Space sets it off, and the turn goes on until
+   * it does, so retreat time starts then.
+   */
+  remote?: boolean;
 }
 
 export const WEAPONS: Record<WeaponId, WeaponSpec> = {
@@ -64,10 +93,34 @@ export const WEAPONS: Record<WeaponId, WeaponSpec> = {
   bazooka: { name: 'Bazooka', use: 'throw', projectile: 'shell', droppable: false, hasFuse: false },
   grenade: { name: 'Grenade', use: 'throw', projectile: 'grenade', droppable: true, hasFuse: true },
   cluster: { name: 'Cluster Bomb', use: 'throw', projectile: 'cluster', droppable: true, hasFuse: true },
+  petrol: { name: 'Petrol Bomb', use: 'throw', projectile: 'petrol', droppable: true, hasFuse: false },
+  homing: {
+    name: 'Homing Missile',
+    use: 'throw',
+    projectile: 'homing',
+    droppable: false,
+    hasFuse: false,
+    needsTarget: true,
+  },
   banana: { name: 'Banana Bomb', use: 'throw', projectile: 'banana', droppable: true, hasFuse: true },
+  firePunch: { name: 'Fire Punch', use: 'melee', droppable: false, hasFuse: false },
+  dragonBall: { name: 'Dragon Ball', use: 'shoot', projectile: 'dragonBall', droppable: false, hasFuse: false },
+  kamikaze: { name: 'Kamikaze', use: 'kamikaze', droppable: false, hasFuse: false },
+  shotgun: { name: 'Shotgun', use: 'gun', droppable: false, hasFuse: false },
+  uzi: { name: 'Uzi', use: 'gun', droppable: false, hasFuse: false },
+  holy: { name: 'Holy Hand Grenade', use: 'throw', projectile: 'holy', droppable: true, hasFuse: false },
   dynamite: { name: 'Dynamite', use: 'place', projectile: 'dynamite', droppable: true, hasFuse: false },
   mine: { name: 'Mine', use: 'place', projectile: 'mine', droppable: true, hasFuse: false },
   oldWoman: { name: 'Old Woman', use: 'place', projectile: 'oldWoman', droppable: false, hasFuse: false },
+  sheep: { name: 'Sheep', use: 'place', projectile: 'sheep', droppable: false, hasFuse: false, remote: true },
+  superSheep: {
+    name: 'Super Sheep',
+    use: 'place',
+    projectile: 'superSheep',
+    droppable: false,
+    hasFuse: false,
+    remote: true,
+  },
   airstrike: { name: 'Air Strike', use: 'strike', projectile: 'missile', droppable: false, hasFuse: false },
   bat: { name: 'Baseball Bat', use: 'melee', droppable: false, hasFuse: false },
   prod: { name: 'Prod', use: 'melee', droppable: false, hasFuse: false },
@@ -96,12 +149,12 @@ const soon = (name: string): PanelSlot => ({ soon: name });
  */
 export const PANEL: { weapons: PanelSlot[][]; utilities: PanelSlot[][] } = {
   weapons: [
-    ['bazooka', 'grenade', 'cluster', soon('Petrol Bomb'), soon('Water Bomb'), soon('Homing Missile'), 'banana'],
-    [soon('Fire Punch'), soon('Dragon Ball'), 'bat', 'prod', soon('Kamikaze'), 'mine', 'dynamite'],
+    ['bazooka', 'grenade', 'cluster', 'petrol', soon('Water Bomb'), 'homing', 'banana'],
+    ['firePunch', 'dragonBall', 'bat', 'prod', 'kamikaze', 'mine', 'dynamite'],
     // The third slot looks like a flamethrower in WR's icon; not confirmed by name yet.
-    [soon('Shotgun'), soon('Uzi'), soon('Flamethrower'), null, soon('Water Gun'), soon('Sentry Gun'), soon('Holy Hand Grenade')],
+    ['shotgun', 'uzi', soon('Flamethrower'), null, soon('Water Gun'), soon('Sentry Gun'), 'holy'],
     ['airstrike', null, soon('Bunker Buster'), soon('Water Strike'), null, soon('Boggy B'), null],
-    [soon('Sheep'), soon('Mole'), null, 'oldWoman', soon('Super Sheep'), null, soon('Concrete Donkey')],
+    ['sheep', soon('Mole'), null, 'oldWoman', 'superSheep', null, soon('Concrete Donkey')],
   ],
   utilities: [
     ['jetpack', 'rope', 'parachute', 'teleport'],
@@ -143,10 +196,17 @@ export const SCHEMES: Record<SchemeId, { name: string; ammo: Record<WeaponId, Am
     ammo: {
       ...unlimited(),
       cluster: { count: 3, delay: 0 },
+      petrol: { count: 2, delay: 1 },
+      homing: { count: 2, delay: 1 },
       banana: { count: 1, delay: 2 },
+      dragonBall: { count: 2, delay: 0 },
+      kamikaze: { count: 1, delay: 2 },
+      holy: { count: 1, delay: 3 },
       dynamite: { count: 2, delay: 1 },
       mine: { count: 3, delay: 0 },
       oldWoman: { count: 1, delay: 3 },
+      sheep: { count: 1, delay: 1 },
+      superSheep: { count: 1, delay: 3 },
       airstrike: { count: 1, delay: 2 },
       bat: { count: 1, delay: 0 },
       // Utility counts from WR's scheme editor (parachute and surrender unlimited).
@@ -235,6 +295,26 @@ export const BLASTS = {
   mine: wr({ crater: 26, damage: [1, 45], damageRange: [6, 47], push: [5, 130], pushRange: [4, 46] }),
   oldWoman: wr({ crater: 52, damage: [1, 75], damageRange: [7, 73], push: [5, 230], pushRange: [4, 70] }),
   airstrike: wr({ crater: 14, damage: [1, 45], damageRange: [6, 20], push: [5, 70], pushRange: [3, 19], lift: 1.3 }),
+  /** The bottle bursting; WR's "Flame-2" row, most likely the petrol bomb's. */
+  petrol: wr({ crater: 15, damage: [1, 15], damageRange: [5, 15], push: [5, 45], pushRange: [5, 14], lift: 1.3 }),
+  /** WR's DragonBallRound: a small hole, 30 damage to whoever it touches. */
+  dragonBall: wr({ crater: 5, damage: [30, 30], damageRange: [10, 10], push: [105, 105], pushRange: [20, 20] }),
+  /** No WR rows for these yet: by feel, after Worms Armageddon. */
+  holy: wr({ crater: 56, damage: [1, 100], damageRange: [8, 95], push: [5, 280], pushRange: [4, 92], lift: 1.3 }),
+  kamikaze: wr({ crater: 30, damage: [1, 50], damageRange: [6, 50], push: [5, 150], pushRange: [4, 48] }),
+  sheep: wr({ crater: 40, damage: [1, 70], damageRange: [6, 65], push: [5, 190], pushRange: [4, 62], lift: 1.3 }),
+  /** A shotgun pellet: 25 to the worm it hits. */
+  shotgun: {
+    radius: 5,
+    damage: [25, 25],
+    damageRange: [10, 10],
+    push: [60, 60],
+    pushRange: [12, 12],
+    lift: 1,
+    waterPush: 0.2,
+  },
+  /** An Uzi bullet; WR's UziRound: a pin-prick hole, 2 damage and a little push each. */
+  uzi: { radius: 1.5, damage: [2, 2], damageRange: [10, 10], push: [10, 10], pushRange: [12, 12], lift: 0, waterPush: 0.2 },
   /** A worm at 0 HP blows up at the end of the turn (WR "WormDeathBlast"). */
   wormDeath: wr({ crater: 12, damage: [1, 25], damageRange: [4, 22], push: [1, 60], pushRange: [10, 20] }),
 } satisfies Record<string, Blast>;
@@ -248,18 +328,39 @@ export interface Melee {
   damage: number;
   /** WR force units, like Blast.push. */
   push: number;
-  /** Swing along the aim (bat), or this many degrees above straight ahead (prod). */
+  /** Swing along the aim (bat), or this many degrees above straight ahead (prod, fire punch). */
   aimed: boolean;
   angle?: number;
+  /** The attacker leaps up at this speed as it strikes (fire punch). */
+  rise?: number;
 }
 
 /**
  * The prod is measured: it pokes a worm about 0.75–1 worm height away up and over at ~85 px/s,
- * ~55° above horizontal. The bat's numbers are WR's table.
+ * ~55° above horizontal. The bat's numbers are WR's table; the fire punch's damage is WR's
+ * "Flame" row (30), with the dragon ball's push.
  */
-export const MELEE: Record<'bat' | 'prod', Melee> = {
+export const MELEE: Record<'bat' | 'prod' | 'firePunch', Melee> = {
   bat: { reach: 16 + 10 * WR_SCALE, damage: 30, push: 200, aimed: true },
   prod: { reach: 18, damage: 0, push: 40, aimed: false, angle: 55 },
+  firePunch: { reach: 20, damage: 30, push: 105, aimed: false, angle: 75, rise: 150 },
+};
+
+/**
+ * Guns: how many times Space fires in one go (the shotgun's two shots), bullets per shot,
+ * ticks between bullets, and how much they spread.
+ */
+export interface Gun {
+  shots: number;
+  bullets: number;
+  interval: number;
+  spread: number;
+  blast: Blast;
+}
+
+export const GUNS: Record<'shotgun' | 'uzi', Gun> = {
+  shotgun: { shots: 2, bullets: 1, interval: 0, spread: 0, blast: BLASTS.shotgun },
+  uzi: { shots: 1, bullets: 25, interval: 3, spread: 0.06, blast: BLASTS.uzi },
 };
 
 /**
@@ -271,8 +372,12 @@ export const AIRSTRIKE = { missiles: 5, spacing: 18, height: 80, vx: 160, vy: 38
 /** What weapon handling needs from the world. */
 export interface WeaponContext {
   spawn(launch: Launch): void;
+  /** Random number in 0..1 from the world's seeded sequence. */
+  rng(): number;
   /** Swings a melee weapon from `worm` along (dirX, dirY). */
   hit(worm: Worm, dirX: number, dirY: number, melee: Melee): void;
+  /** Fires a bullet from (x, y) along (dirX, dirY): it goes off where it first hits something. */
+  shoot(worm: Worm, x: number, y: number, dirX: number, dirY: number, blast: Blast): void;
   /** Height of the first ground from the top in column x (the water if there is none). */
   surfaceY(x: number): number;
   /** A weapon (not the rope) went off: the match starts retreat time. */
@@ -292,15 +397,24 @@ export interface WeaponContext {
 /** A girder's angle in radians from its eighths of a half turn. */
 export const girderRadians = (step: number): number => (step * Math.PI) / 8;
 
+/** The worm's aim as a unit vector, taking the way it faces into account. */
+function aimDirection(worm: Worm, spread = 0): { x: number; y: number } {
+  const angle = worm.aim + spread;
+  return { x: Math.cos(angle) * worm.facing, y: -Math.sin(angle) };
+}
+
 /**
  * The active worm's weapon controls, WR's: pick a weapon, 1–5 to set a fuse, Tab (Toggle) to
  * cycle the fuse, flip the air strike's direction or turn the girder, Space to fire (hold to
  * charge), Enter (AltFire) to drop the selected weapon while on the rope, parachute or jet
- * pack, and a click on the map for the air strike, teleport and girder. With `canFire` false
- * (retreat time) only the rope works, plus a parachute or jet pack already in use; `canUse`
- * says whether the team may use the selected utility at all.
+ * pack, and a click on the map for the air strike, teleport, girder and homing missile. With
+ * `canFire` false (retreat time) only the rope works, plus a parachute or jet pack already in
+ * use; `canUse` says whether the team may use the selected utility at all.
  */
 export function useWeapons(worm: Worm, input: WormInput, ctx: WeaponContext, canFire = true, canUse = canFire): void {
+  // Mid-burst (between shotgun shots too) the gun stays in hand.
+  if (worm.gun) return fireGun(worm, input, ctx, canFire);
+  if (worm.kamikaze) return;
   if (input.select) {
     worm.weapon = input.select;
     worm.charge = null;
@@ -327,7 +441,7 @@ export function useWeapons(worm: Worm, input: WormInput, ctx: WeaponContext, can
   else if (input.fire) pressFire(worm, ctx, canFire, canUse);
 }
 
-/** Air strike, teleport and girder go where the map was clicked. */
+/** Air strike, teleport and girder go where the map was clicked; the homing missile aims there. */
 function useTarget(worm: Worm, target: { x: number; y: number }, ctx: WeaponContext): void {
   if (worm.weapon === 'airstrike') {
     if (worm.grounded) callStrike(worm, target.x, ctx);
@@ -335,6 +449,8 @@ function useTarget(worm: Worm, target: { x: number; y: number }, ctx: WeaponCont
     if (ctx.teleport(worm, target.x, target.y)) ctx.weaponUsed('teleport');
   } else if (worm.weapon === 'girder') {
     if (ctx.placeGirder(worm, target.x, target.y, girderRadians(worm.girderAngle))) ctx.weaponUsed('girder');
+  } else if (WEAPONS[worm.weapon].needsTarget) {
+    worm.marker = { x: target.x, y: target.y };
   }
 }
 
@@ -378,10 +494,27 @@ function pressFire(worm: Worm, ctx: WeaponContext, canFire: boolean, canUse: boo
   // After letting go of the rope, Space shoots it again whatever is selected.
   if (worm.weapon === 'rope' || worm.ropeChain) return shootRope(worm);
   if (!canFire || !worm.grounded) return; // other weapons need solid ground
+  if (spec.needsTarget && !worm.marker) return; // click the map first
   if (spec.use === 'throw') worm.charge = 0;
-  else if (spec.use === 'place') place(worm, spec.projectile!, ctx);
+  else if (spec.use === 'place') place(worm, ctx);
   else if (spec.use === 'melee') swing(worm, MELEE[worm.weapon as keyof typeof MELEE], ctx);
+  else if (spec.use === 'shoot') shoot(worm, ctx);
+  else if (spec.use === 'gun') {
+    const gun = GUNS[worm.weapon as keyof typeof GUNS];
+    worm.gun = { shots: gun.shots - 1, bullets: gun.bullets, cooldown: 0 }; // first bullet next tick
+  } else if (spec.use === 'kamikaze') {
+    const dir = aimDirection(worm);
+    worm.kamikaze = { dx: dir.x, dy: dir.y, left: PHYS.kamikazeRange, hit: [] };
+    worm.grounded = false;
+    ctx.weaponUsed(worm.weapon);
+  }
 }
+
+/** Charge speeds by what's launched; the rest are thrown at grenade speed. */
+const LAUNCH_SPEED: Partial<Record<ProjectileKind, () => number>> = {
+  shell: () => PHYS.bazookaSpeed,
+  homing: () => PHYS.bazookaSpeed,
+};
 
 /** Builds up power while Space is held; fires on release or at full power. */
 function charge(worm: Worm, input: WormInput, ctx: WeaponContext): void {
@@ -396,24 +529,52 @@ function charge(worm: Worm, input: WormInput, ctx: WeaponContext): void {
   }
   worm.charge = null;
   const kind = WEAPONS[worm.weapon].projectile!;
-  const dirX = Math.cos(worm.aim) * worm.facing;
-  const dirY = -Math.sin(worm.aim);
-  const speed = power * (kind === 'shell' ? PHYS.bazookaSpeed : PHYS.grenadeSpeed);
+  const dir = aimDirection(worm);
+  const speed = power * (LAUNCH_SPEED[kind]?.() ?? PHYS.grenadeSpeed);
   const offset = PHYS.wormRadius + 4; // start clear of the worm
   ctx.spawn({
     kind,
-    x: worm.x + dirX * offset,
-    y: worm.y + dirY * offset,
-    vx: dirX * speed,
-    vy: dirY * speed,
+    x: worm.x + dir.x * offset,
+    y: worm.y + dir.y * offset,
+    vx: dir.x * speed,
+    vy: dir.y * speed,
     fuse: worm.fuse,
+    target: kind === 'homing' ? worm.marker : undefined,
   });
+  if (kind === 'homing') worm.marker = null;
   ctx.weaponUsed(worm.weapon);
 }
 
-/** Mines, dynamite and the old woman are set down just in front of the worm. */
-function place(worm: Worm, kind: ProjectileKind, ctx: WeaponContext): void {
-  ctx.spawn({ kind, x: worm.x + worm.facing * (PHYS.wormRadius + 5), y: worm.y, vx: worm.facing * 30, vy: -50 });
+/**
+ * Mines, dynamite, the old woman and sheep are set down just in front of the worm. A sheep is
+ * steered from then on; its ammo goes now, but retreat time only starts when it goes off.
+ */
+function place(worm: Worm, ctx: WeaponContext): void {
+  const spec = WEAPONS[worm.weapon];
+  ctx.spawn({
+    kind: spec.projectile!,
+    x: worm.x + worm.facing * (PHYS.wormRadius + 5),
+    y: worm.y,
+    vx: worm.facing * 30,
+    vy: -50,
+    owner: worm.id,
+  });
+  if (spec.remote) ctx.utilityUsed(worm.weapon);
+  else ctx.weaponUsed(worm.weapon);
+}
+
+/** The dragon ball: a fireball straight along the aim. */
+function shoot(worm: Worm, ctx: WeaponContext): void {
+  const dir = aimDirection(worm);
+  const offset = PHYS.wormRadius + 6;
+  ctx.spawn({
+    kind: WEAPONS[worm.weapon].projectile!,
+    x: worm.x + dir.x * offset,
+    y: worm.y + dir.y * offset,
+    vx: dir.x * PHYS.dragonBallSpeed,
+    vy: dir.y * PHYS.dragonBallSpeed,
+    fuse: PHYS.dragonBallLife,
+  });
   ctx.weaponUsed(worm.weapon);
 }
 
@@ -422,6 +583,45 @@ function swing(worm: Worm, melee: Melee, ctx: WeaponContext): void {
   const dirX = Math.cos(angle) * worm.facing;
   const dirY = -Math.sin(angle);
   ctx.hit(worm, dirX, dirY, melee);
+  if (melee.rise) {
+    worm.vx = 0;
+    worm.vy = -melee.rise;
+    worm.grounded = false;
+    worm.afterTouch = 0;
+  }
+  ctx.weaponUsed(worm.weapon);
+}
+
+/**
+ * A gun in hand: bullets go out every `interval` ticks along the aim (which can still move),
+ * and the shotgun waits for Space again between its shots. ← → turn the worm round. When the
+ * last bullet is out, or the worm is knocked off its feet, the weapon counts as used.
+ */
+function fireGun(worm: Worm, input: WormInput, ctx: WeaponContext, canFire: boolean): void {
+  const gun = worm.gun!;
+  const spec = GUNS[worm.weapon as keyof typeof GUNS];
+  if (input.left !== input.right) worm.facing = input.left ? -1 : 1;
+  if (!worm.grounded) return finishGun(worm, ctx);
+  if (gun.bullets === 0) {
+    if (!input.fire || !canFire) return;
+    gun.shots--;
+    gun.bullets = spec.bullets;
+    gun.cooldown = 0;
+  }
+  if (gun.cooldown > 0) {
+    gun.cooldown--;
+    return;
+  }
+  const dir = aimDirection(worm, (ctx.rng() * 2 - 1) * spec.spread);
+  const offset = PHYS.wormRadius + 1;
+  ctx.shoot(worm, worm.x + dir.x * offset, worm.y + dir.y * offset, dir.x, dir.y, spec.blast);
+  gun.bullets--;
+  gun.cooldown = spec.interval - 1;
+  if (gun.bullets === 0 && gun.shots === 0) finishGun(worm, ctx);
+}
+
+function finishGun(worm: Worm, ctx: WeaponContext): void {
+  worm.gun = null;
   ctx.weaponUsed(worm.weapon);
 }
 

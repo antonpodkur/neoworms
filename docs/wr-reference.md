@@ -95,8 +95,15 @@ gravity as worms, hard bounces keep ~0.38 of the speed into a surface and ~0.57 
 glances off worms keeping ~0.56, fuse as set. Its crater matches the bazooka's row, which it
 uses (no row in the export).
 
+**Dragon Ball** uses WR's DragonBallRound (crater 5, 30 damage within 10, push 105 within 20);
+the **Fire Punch** takes the "Flame" row's 30 damage (the row has no push force, so it borrows
+the dragon ball's 105); the **Petrol Bomb**'s burst is "Flame-2" (crater 15, 15 damage, push
+45), which looks like its row. **Uzi** bullets follow UziRound (a 1-unit hole, 2 damage, push up
+to 15; we use 10). Shotgun, Homing Missile, Holy Hand Grenade, Kamikaze and the sheep have no
+rows in the export, so their numbers are by feel after Worms Armageddon (`BLASTS` and `PHYS`).
+
 The export also has rows we don't use yet: Concrete Donkey (30 / 80 / 77 / 235), Hammer,
-Boomerang, Skunk, Mole, Bunker Buster, Sentry gun, Dragon ball, Flame, Uzi.
+Boomerang, Skunk, Mole (7.5 / 25 / 15 / 55), Bunker Buster (17 / 30 / 21 / 60), Sentry gun.
 
 Worms brought to 0 HP stay on the map until the turn ends, then all blow up together with the
 death blast; the match settles again after that, since those blasts can finish off more worms.
