@@ -3,7 +3,7 @@ import { DT, TICK_RATE } from '../sim/constants';
 import { generateMap, mapFromImage, type GeneratedMap } from '../sim/mapgen';
 import { createMatch, type Match, type MatchEvent, type MatchSettings } from '../sim/match';
 import { randomSeed } from '../sim/rng';
-import { CATEGORIES, WEAPONS, type WeaponId, type WeaponStatus } from '../sim/weapons';
+import { QUICK_SELECT, WEAPONS, type WeaponId, type WeaponStatus } from '../sim/weapons';
 import type { World } from '../sim/world';
 import { NO_INPUT, type Worm, type WormInput } from '../sim/worm';
 import {
@@ -27,7 +27,7 @@ import { loadSettings, SetupScreen } from './SetupScreen';
 import { TERRAIN_TEXTURE, TerrainView } from './TerrainView';
 import { physicsChanges, showMapPicker, toggleTuningPanel, useHostPhysics, useOwnPhysics } from './TuningPanel';
 import { WaterView } from './WaterView';
-import { WeaponPanel, weaponForKey } from './WeaponPanel';
+import { WeaponPanel, weaponForQuickSelect } from './WeaponPanel';
 import { createWormAnims, teamColor, teamColorCss, WORM_SHEET, WormView } from './WormView';
 import wormAtlasUrl from '../../sprites/worm.json?url';
 import wormSheetUrl from '../../sprites/worm.png?url';
@@ -521,7 +521,7 @@ export class GameScene extends Phaser.Scene {
   private setupInput(): void {
     const kb = this.input.keyboard!;
     this.cursors = kb.createCursorKeys();
-    kb.addCapture('ENTER,BACKSPACE,TAB,SPACE,SHIFT,F1,F2,F3,F4,F5,F6');
+    kb.addCapture(['ENTER', 'BACKSPACE', 'TAB', 'SPACE', 'SHIFT', ...QUICK_SELECT.map((q) => q.key)].join(','));
     this.setKeyboard(true);
     const onPress = (key: string, action: () => void) =>
       kb.on(`keydown-${key}`, (e: KeyboardEvent) => {
@@ -540,11 +540,12 @@ export class GameScene extends Phaser.Scene {
     onPress('ESC', () => (panel.isOpen ? panel.close() : this.openSetup()));
     const arrows = [['LEFT', -1, 0], ['RIGHT', 1, 0], ['UP', 0, -1], ['DOWN', 0, 1]] as const;
     for (const [key, dx, dy] of arrows) onPress(key, () => panel.isOpen && panel.move(dx, dy));
-    // F1–F6 pick from a row of the panel without opening it; pressing again goes along the row.
-    CATEGORIES.forEach((category, i) =>
-      onPress(category.key, () => {
+    // WR's Quick Select: F1–F5 pick from a weapon row, F6–F10 from a utility row, without
+    // opening the panel; pressing again goes along the row.
+    QUICK_SELECT.forEach((quick, i) =>
+      onPress(quick.key, () => {
         const worm = this.controlledWorm();
-        const weapon = worm && weaponForKey(i, worm.weapon, this.weaponStatus);
+        const weapon = worm && weaponForQuickSelect(i, worm.weapon, this.weaponStatus);
         if (!weapon) return;
         panel.close();
         this.picked = weapon;

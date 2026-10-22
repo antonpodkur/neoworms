@@ -1,4 +1,4 @@
-import { CATEGORIES, isUsable, WEAPONS, type WeaponId, type WeaponStatus } from '../sim/weapons';
+import { isUsable, PANEL, QUICK_SELECT, WEAPONS, type PanelSlot, type WeaponId, type WeaponStatus } from '../sim/weapons';
 
 /** Placeholder icons until real art (milestone 7). */
 const ICONS: Record<WeaponId, string> = {
@@ -15,32 +15,30 @@ const ICONS: Record<WeaponId, string> = {
   prod: '👉',
 };
 
-/** Utilities get blue slots, weapons orange, as in Worms Revolution. */
-const TOOLS = new Set<WeaponId>(['rope']);
-
-/** Grid height: the longest category, so every column has the same number of slots. */
-const ROWS = Math.max(...CATEGORIES.map((c) => c.weapons.length));
-
 interface Cell {
-  id: WeaponId;
-  button: HTMLButtonElement;
-  ammo: HTMLElement;
-  wait: HTMLElement;
+  slot: PanelSlot;
+  el: HTMLElement;
+  ammo?: HTMLElement;
+  wait?: HTMLElement;
 }
 
+const COLS = PANEL.weapons[0].length + PANEL.utilities[0].length;
+const ROWS = PANEL.weapons.length;
+
 /**
- * The weapon panel, laid out like Worms Revolution's Inventory: a grid of slots, one column per
- * category with its function key on top, empty slots filling the rest. Ammo sits in a slot's
- * corner (none for unlimited); weapons the team can't use yet are greyed with the turns left in
- * brackets. A bar along the bottom names the highlighted weapon. Arrows move, Space or Enter
- * picks, Shift, Esc or a right click closes; the mouse highlights and clicks too. Plain DOM so
- * it stays crisp at any zoom.
+ * The weapon panel, laid out like Worms Revolution's Inventory: five rows of seven weapons
+ * (orange slots) and four utilities (blue), with WR's Quick Select key at the start of each
+ * row. Weapons we haven't made yet keep their WR slot but show empty. Ammo sits in a slot's
+ * corner (none for unlimited); weapons the team can't use yet are greyed with the turns left
+ * in brackets. A bar along the bottom names the highlighted weapon. Arrows move, Space or
+ * Enter picks, Shift, Esc or a right click closes; the mouse highlights and clicks too. Plain
+ * DOM so it stays crisp at any zoom.
  */
 export class WeaponPanel {
   private readonly root = document.getElementById('weapon-panel')!;
   private readonly name = document.createElement('span');
   private readonly note = document.createElement('span');
-  /** Per category (column), its weapons top to bottom. */
+  /** Rows of the whole grid, weapons then utilities, left to right. */
   private readonly cells: Cell[][];
   private col = 0;
   private row = 0;
@@ -56,39 +54,20 @@ export class WeaponPanel {
 
     const grid = document.createElement('div');
     grid.className = 'grid';
-    grid.style.gridTemplateColumns = `repeat(${CATEGORIES.length}, auto)`;
-    for (const category of CATEGORIES) {
-      const key = document.createElement('div');
-      key.className = 'key';
-      key.textContent = category.key;
-      key.title = category.name;
-      grid.append(key);
-    }
-    this.cells = CATEGORIES.map((category, c) =>
-      category.weapons.map((id, r) => {
-        const button = document.createElement('button');
-        button.className = `slot ${TOOLS.has(id) ? 'tool' : 'weapon'}`;
-        button.tabIndex = -1;
-        button.title = WEAPONS[id].name;
-        button.innerHTML = `<span class="ammo"></span><span class="icon">${ICONS[id]}</span><span class="wait"></span>`;
-        button.addEventListener('mousedown', (e) => e.preventDefault()); // keep keyboard focus on the game
-        button.addEventListener('mouseenter', () => this.moveTo(c, r));
-        button.addEventListener('click', () => this.pick(c, r));
-        return { id, button, ammo: button.querySelector<HTMLElement>('.ammo')!, wait: button.querySelector<HTMLElement>('.wait')! };
-      }),
-    );
-    // CSS grid fills row by row: the weapons in each category run down their column.
-    for (let r = 0; r < ROWS; r++) {
-      for (const column of this.cells) {
-        const cell = column[r];
-        if (cell) grid.append(cell.button);
-        else {
-          const empty = document.createElement('div');
-          empty.className = 'slot empty';
-          grid.append(empty);
-        }
-      }
-    }
+    grid.style.gridTemplateColumns =
+      `auto repeat(${PANEL.weapons[0].length}, auto) auto repeat(${PANEL.utilities[0].length}, auto)`;
+    this.cells = PANEL.weapons.map((weapons, r) => {
+      const row = [...weapons, ...PANEL.utilities[r]];
+      grid.append(keyLabel(QUICK_SELECT[r].key));
+      return row.map((slot, c) => {
+        if (c === weapons.length) grid.append(keyLabel(QUICK_SELECT[r + ROWS].key));
+        const cell = this.makeCell(slot, c >= weapons.length);
+        cell.el.addEventListener('mouseenter', () => this.moveTo(c, r));
+        cell.el.addEventListener('click', () => this.pick(c, r));
+        grid.append(cell.el);
+        return cell;
+      });
+    });
 
     const footer = document.createElement('div');
     footer.className = 'footer';
@@ -105,8 +84,8 @@ export class WeaponPanel {
   }
 
   open(current: WeaponId): void {
-    this.col = Math.max(0, this.cells.findIndex((column) => column.some((c) => c.id === current)));
-    this.row = Math.max(0, this.cells[this.col].findIndex((c) => c.id === current));
+    this.row = Math.max(0, this.cells.findIndex((row) => row.some((c) => c.slot === current)));
+    this.col = Math.max(0, this.cells[this.row].findIndex((c) => c.slot === current));
     this.root.hidden = false;
     this.render();
   }
@@ -115,17 +94,29 @@ export class WeaponPanel {
     this.root.hidden = true;
   }
 
-  /** Arrow keys: across the categories, or up and down a category's weapons (both wrap). */
+  /** Arrow keys: across the grid, wrapping at the edges, empty slots included (as in WR). */
   move(dx: number, dy: number): void {
-    const cols = this.cells.length;
-    const col = (this.col + dx + cols) % cols;
-    const length = this.cells[col].length;
-    const row = dx ? Math.min(this.row, length - 1) : (this.row + dy + length) % length;
-    this.moveTo(col, row);
+    this.moveTo((this.col + dx + COLS) % COLS, (this.row + dy + ROWS) % ROWS);
   }
 
   choose(): void {
     this.pick(this.col, this.row);
+  }
+
+  private makeCell(slot: PanelSlot, utility: boolean): Cell {
+    if (slot === null || typeof slot === 'object') {
+      const el = document.createElement('div');
+      el.className = 'slot empty';
+      if (slot) el.title = `${slot.soon} (not in the game yet)`;
+      return { slot, el };
+    }
+    const button = document.createElement('button');
+    button.className = `slot ${utility ? 'tool' : 'weapon'}`;
+    button.tabIndex = -1;
+    button.title = WEAPONS[slot].name;
+    button.innerHTML = `<span class="ammo"></span><span class="icon">${ICONS[slot]}</span><span class="wait"></span>`;
+    button.addEventListener('mousedown', (e) => e.preventDefault()); // keep keyboard focus on the game
+    return { slot, el: button, ammo: button.querySelector<HTMLElement>('.ammo')!, wait: button.querySelector<HTMLElement>('.wait')! };
   }
 
   private moveTo(col: number, row: number): void {
@@ -134,54 +125,72 @@ export class WeaponPanel {
     this.render();
   }
 
-  /** Weapons that can't be used yet (or any more) stay put, with a little shake. */
+  /** Weapons that can't be used yet (or any more), and empty slots, stay put with a little shake. */
   private pick(col: number, row: number): void {
-    const cell = this.cells[col][row];
-    if (!isUsable(this.status(cell.id))) {
-      cell.button.animate(
+    const cell = this.cells[row][col];
+    if (typeof cell.slot !== 'string' || !isUsable(this.status(cell.slot))) {
+      cell.el.animate(
         [{ transform: 'translateX(0)' }, { transform: 'translateX(-4px)' }, { transform: 'translateX(4px)' }, { transform: 'translateX(0)' }],
         { duration: 180 },
       );
       return;
     }
     this.close();
-    this.onPick(cell.id);
+    this.onPick(cell.slot);
   }
 
   private render(): void {
-    this.cells.forEach((column, c) =>
-      column.forEach(({ id, button, ammo, wait }, r) => {
-        const s = this.status(id);
-        button.classList.toggle('selected', c === this.col && r === this.row);
-        button.classList.toggle('unavailable', !isUsable(s));
-        ammo.textContent = s.ammo === null ? '' : String(s.ammo);
-        wait.textContent = s.blocked ? '✕' : s.wait > 0 ? `(${s.wait})` : '';
+    this.cells.forEach((row, r) =>
+      row.forEach(({ slot, el, ammo, wait }, c) => {
+        el.classList.toggle('selected', c === this.col && r === this.row);
+        if (typeof slot !== 'string') return;
+        const s = this.status(slot);
+        el.classList.toggle('unavailable', !isUsable(s));
+        ammo!.textContent = s.ammo === null ? '' : String(s.ammo);
+        wait!.textContent = s.blocked ? '✕' : s.wait > 0 ? `(${s.wait})` : '';
       }),
     );
-    const { id } = this.cells[this.col][this.row];
-    const s = this.status(id);
-    this.name.textContent = s.ammo === null ? WEAPONS[id].name : `${s.ammo} x ${WEAPONS[id].name}`;
+    const { slot } = this.cells[this.row][this.col];
+    if (typeof slot !== 'string') {
+      this.name.textContent = slot ? slot.soon : '';
+      this.note.textContent = slot ? 'Not in the game yet' : '';
+      return;
+    }
+    const s = this.status(slot);
+    this.name.textContent = `${s.ammo === null ? '∞' : s.ammo} x ${WEAPONS[slot].name}`;
     this.note.textContent = s.blocked
       ? 'No open sky on this map'
       : s.wait > 0
         ? `Ready in ${s.wait} turn${s.wait > 1 ? 's' : ''}`
         : s.ammo === 0
           ? 'None left'
-          : CATEGORIES[this.col].key;
+          : quickKey(slot);
   }
 }
 
+function keyLabel(text: string): HTMLElement {
+  const el = document.createElement('div');
+  el.className = 'key';
+  el.textContent = text;
+  return el;
+}
+
+/** The Quick Select key whose row holds this weapon. */
+function quickKey(weapon: WeaponId): string {
+  return QUICK_SELECT.find((q) => q.row.includes(weapon))?.key ?? '';
+}
+
 /**
- * A function key: picks the first usable weapon of its category, or, if one is already in
- * hand, the next usable one down the column. Null when none in it can be used.
+ * A Quick Select key (index into QUICK_SELECT): the first usable weapon of its row, or, if one
+ * is already in hand, the next usable one along the row. Null when none in it can be used.
  */
-export function weaponForKey(
-  category: number,
+export function weaponForQuickSelect(
+  index: number,
   current: WeaponId,
   status: (weapon: WeaponId) => WeaponStatus,
 ): WeaponId | null {
-  const weapons = CATEGORIES[category].weapons;
-  const start = weapons.indexOf(current) + 1; // 0 when holding something from another category
+  const weapons = QUICK_SELECT[index].row.filter((s): s is WeaponId => typeof s === 'string');
+  const start = weapons.indexOf(current) + 1; // 0 when holding something from another row
   for (let i = 0; i < weapons.length; i++) {
     const id = weapons[(start + i) % weapons.length];
     if (isUsable(status(id))) return id;

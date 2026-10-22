@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { PHYS, resetPhys } from './constants';
 import { attachRope } from './rope';
 import { Terrain } from './terrain';
-import { AIRSTRIKE, BLASTS, MELEE, roundBlast } from './weapons';
+import { AIRSTRIKE, BLASTS, MELEE, PANEL, QUICK_SELECT, roundBlast, WEAPON_ORDER } from './weapons';
 import { NO_INPUT, type Worm, type WormInput } from './worm';
 import { World, type SimEvent } from './world';
 
@@ -430,5 +430,20 @@ describe('Impact', () => {
     }
     expect(furthest).toBeLessThan(wall.x - PHYS.wormRadius);
     expect(grenade.x).toBeLessThan(wall.x);
+  });
+});
+
+describe('Weapon panel layout', () => {
+  it('has every weapon in exactly one slot, in a 5 x (7 + 4) grid like WR', () => {
+    const slots = [...PANEL.weapons.flat(), ...PANEL.utilities.flat()];
+    for (const id of WEAPON_ORDER) expect(slots.filter((s) => s === id)).toHaveLength(1);
+    expect(PANEL.weapons.map((r) => r.length)).toEqual([7, 7, 7, 7, 7]);
+    expect(PANEL.utilities.map((r) => r.length)).toEqual([4, 4, 4, 4, 4]);
+  });
+
+  it('gives F1–F5 to the weapon rows and F6–F10 to the utility rows', () => {
+    expect(QUICK_SELECT.map((q) => q.key)).toEqual(['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10']);
+    expect(QUICK_SELECT[0].row).toBe(PANEL.weapons[0]);
+    expect(QUICK_SELECT[5].row).toBe(PANEL.utilities[0]);
   });
 });

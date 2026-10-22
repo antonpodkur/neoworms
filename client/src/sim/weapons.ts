@@ -66,14 +66,43 @@ export const WEAPONS: Record<WeaponId, WeaponSpec> = {
 
 export const WEAPON_ORDER = Object.keys(WEAPONS) as WeaponId[];
 
-/** The weapon panel's rows, as in Worms: each has a function key that picks along its row. */
-export const CATEGORIES: { name: string; key: string; weapons: WeaponId[] }[] = [
-  { name: 'Artillery', key: 'F1', weapons: ['bazooka'] },
-  { name: 'Grenades', key: 'F2', weapons: ['grenade', 'cluster', 'banana'] },
-  { name: 'Explosives', key: 'F3', weapons: ['dynamite', 'mine', 'oldWoman'] },
-  { name: 'Air', key: 'F4', weapons: ['airstrike'] },
-  { name: 'Close combat', key: 'F5', weapons: ['bat', 'prod'] },
-  { name: 'Tools', key: 'F6', weapons: ['rope'] },
+/**
+ * A slot of the weapon panel: one of our weapons, a Worms Revolution weapon we haven't made yet
+ * (its name; the slot shows empty), or nothing.
+ */
+export type PanelSlot = WeaponId | { soon: string } | null;
+
+const soon = (name: string): PanelSlot => ({ soon: name });
+
+/**
+ * The weapon panel laid out as in Worms Revolution's Inventory: five rows of seven weapons and
+ * five rows of four utilities, every weapon in its WR slot (read off WR's scheme editor).
+ */
+export const PANEL: { weapons: PanelSlot[][]; utilities: PanelSlot[][] } = {
+  weapons: [
+    ['bazooka', 'grenade', 'cluster', soon('Petrol Bomb'), soon('Water Bomb'), soon('Homing Missile'), 'banana'],
+    [soon('Fire Punch'), soon('Dragon Ball'), 'bat', 'prod', soon('Kamikaze'), 'mine', 'dynamite'],
+    // The third slot looks like a flamethrower in WR's icon; not confirmed by name yet.
+    [soon('Shotgun'), soon('Uzi'), soon('Flamethrower'), null, soon('Water Gun'), soon('Sentry Gun'), soon('Holy Hand Grenade')],
+    ['airstrike', null, soon('Bunker Buster'), soon('Water Strike'), null, soon('Boggy B'), null],
+    [soon('Sheep'), soon('Mole'), null, 'oldWoman', soon('Super Sheep'), null, soon('Concrete Donkey')],
+  ],
+  utilities: [
+    [soon('Jet Pack'), 'rope', soon('Parachute'), soon('Teleport')],
+    [soon('Blow Torch'), soon('Pneumatic Drill'), soon('Girder'), soon('Wrench')],
+    [soon('Telekinesis'), soon('UFO'), soon('Electromagnet'), null],
+    [soon('Plug Hole'), soon('Teleshield'), null, soon('Stick Up')],
+    [soon('Worm Select'), soon('Skip Go'), null, null],
+  ],
+};
+
+/**
+ * WR's Quick Select keys: F1–F5 pick from the weapon rows, F6–F10 from the utility rows,
+ * each press moving on along the row.
+ */
+export const QUICK_SELECT: { key: string; row: PanelSlot[] }[] = [
+  ...PANEL.weapons.map((row, i) => ({ key: `F${i + 1}`, row })),
+  ...PANEL.utilities.map((row, i) => ({ key: `F${i + 6}`, row })),
 ];
 
 /**
