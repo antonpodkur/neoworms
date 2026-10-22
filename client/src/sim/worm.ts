@@ -150,8 +150,14 @@ export function stepWorm(worm: Worm, input: WormInput, terrain: Terrain, wind = 
   }
   if (worm.jetpack !== null) return flyJetpack(worm, input, terrain);
 
-  if (input.up) worm.aim = Math.min(Math.PI / 2, worm.aim + PHYS.aimSpeed * DT);
-  if (input.down) worm.aim = Math.max(-Math.PI / 2, worm.aim - PHYS.aimSpeed * DT);
+  if (worm.ropeChain) aimRopeInAir(worm, input);
+  else {
+    // Like WR, the rope only aims at the upper half: from straight ahead up to straight up.
+    const lowest = worm.weapon === 'rope' ? 0 : -Math.PI / 2;
+    if (input.up) worm.aim = Math.min(Math.PI / 2, worm.aim + PHYS.aimSpeed * DT);
+    if (input.down) worm.aim = worm.aim - PHYS.aimSpeed * DT;
+    worm.aim = Math.max(lowest, worm.aim);
+  }
 
   if (worm.grounded && worm.slide !== 0) {
     slide(worm, terrain); // no control until it stops
@@ -173,6 +179,18 @@ export function stepWorm(worm: Worm, input: WormInput, terrain: Terrain, wind = 
   }
 
   return worm.grounded ? 0 : fly(worm, input, terrain, wind);
+}
+
+/**
+ * In the air after letting go of the rope, WR gives the next shot three directions only:
+ * ← up-left at 45°, → up-right at 45°, ↑ straight up.
+ */
+function aimRopeInAir(worm: Worm, input: WormInput): void {
+  if (input.up) worm.aim = Math.PI / 2;
+  else if (input.left !== input.right) {
+    worm.facing = input.left ? -1 : 1;
+    worm.aim = Math.PI / 4;
+  }
 }
 
 /** The first Jump press starts a crouch; another press during it turns the jump into a flip. */

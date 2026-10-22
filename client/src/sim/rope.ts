@@ -29,10 +29,14 @@ const WRAP_SKIP = 2;
 /** How far past straight (as a sine) the rope must swing back before a bend comes undone. */
 const UNWRAP_THRESHOLD = 0.001;
 
-/** Lets go of the rope. The worm keeps its swing speed and can shoot the rope again mid-air. */
+/**
+ * Lets go of the rope. The worm keeps its swing speed and can shoot the rope again mid-air,
+ * aimed 45° up the way it was swinging until ← → ↑ pick another of the three directions.
+ */
 export function releaseRope(worm: Worm): void {
   worm.rope = null;
   worm.ropeChain = true;
+  worm.aim = Math.PI / 4;
 }
 
 /** Shoots the hook out at the aim angle. */

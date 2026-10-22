@@ -67,6 +67,7 @@ Worms Revolution's PC defaults.
 | Space with a sheep out | Sheep: blow it up. Super Sheep: take off, ← → steer, Space again to blow it up. The turn goes on until it does |
 | Space with a utility | Parachute: open / close (it also opens by itself on a long fall; ← → steer). Jet Pack: on / off (↑ ← → fly while there's fuel). Skip Go: end the turn. Surrender: give up. Worm Select: start picking, Tab for the next worm, Space again to switch |
 | Space with the rope | shoot the rope / let go / shoot again mid-air |
+| Rope aim | standing: only the upper half (ahead to straight up); in the air after letting go: ← up-left 45°, → up-right 45°, ↑ straight up |
 | ← → on rope | swing |
 | ↑ ↓ on rope | climb / descend |
 | Enter on the rope, parachute or jet pack | AltFire: drop the selected grenade, cluster or banana bomb, petrol bomb, holy hand grenade, dynamite or mine |

@@ -147,3 +147,36 @@ describe('Ninja rope', () => {
     expect(worm.rope).toBeNull();
   });
 });
+
+describe('Rope aim (as in WR)', () => {
+  it('standing, it only aims at the upper half', () => {
+    const world = openWorld();
+    for (let x = 0; x < 1000; x++) for (let y = 600; y < 800; y++) world.terrain.mask[y * 1000 + x] = 1;
+    const worm = world.addWorm('A', 0, 300, 600 - PHYS.wormRadius - 0.5);
+    run(world, 5);
+    worm.aim = 0.3;
+    run(world, 120, { down: true });
+    expect(worm.aim).toBe(0);
+    worm.weapon = 'bazooka';
+    run(world, 30, { down: true });
+    expect(worm.aim).toBeLessThan(0);
+  });
+
+  it('after letting go, picks one of three directions: up-left, up-right or straight up', () => {
+    const world = openWorld();
+    const worm = hangingWorm(world, 150, 30);
+    run(world, 1, { fire: true }); // let go
+    expect(worm.ropeChain).toBe(true);
+    expect(worm.aim).toBeCloseTo(Math.PI / 4);
+    run(world, 1, { left: true });
+    expect(worm.facing).toBe(-1);
+    expect(worm.aim).toBeCloseTo(Math.PI / 4);
+    run(world, 1, { up: true });
+    expect(worm.aim).toBeCloseTo(Math.PI / 2);
+    run(world, 1, { right: true });
+    run(world, 1, { fire: true });
+    const shot = worm.rope as Extract<Worm['rope'], { phase: 'shooting' }>;
+    expect(shot.dirX).toBeCloseTo(Math.SQRT1_2);
+    expect(shot.dirY).toBeCloseTo(-Math.SQRT1_2);
+  });
+});
