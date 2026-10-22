@@ -17,8 +17,12 @@ export interface WormInput {
   fire: boolean;
   /** ...and whether it's still held (for charging shots). */
   fireHeld: boolean;
-  /** Tab: cycle the selected weapon's option (grenade fuse). */
+  /** Tab (WR's Toggle): cycle the selected weapon's option, e.g. the fuse or the strike direction. */
   toggle: boolean;
+  /** Enter (WR's AltFire): drop the selected weapon while on the rope. */
+  altFire: boolean;
+  /** A fuse picked with the number keys 1–5 this tick (WR's Fuse). */
+  fuse: number | null;
   /** A weapon picked from the weapon menu this tick. */
   select: WeaponId | null;
   /** The map was clicked this tick at this x: calls in an air strike there. */
@@ -35,6 +39,8 @@ export const NO_INPUT: WormInput = {
   fire: false,
   fireHeld: false,
   toggle: false,
+  altFire: false,
+  fuse: null,
   select: null,
   target: null,
 };
@@ -72,6 +78,8 @@ export interface Worm {
   weapon: WeaponId;
   /** Grenade fuse in seconds. */
   fuse: number;
+  /** Which way an air strike comes in (Tab flips it): 1 from the left, -1 from the right. */
+  strikeDir: 1 | -1;
   /** Shot power (0..1) while Space is held; null when not charging. */
   charge: number | null;
   hp: number;
@@ -102,6 +110,7 @@ export function createWorm(id: number, name: string, team: number, x: number, y:
     ropeChain: false,
     weapon: 'rope',
     fuse: 3,
+    strikeDir: 1,
     charge: null,
     hp,
     alive: true,

@@ -257,22 +257,24 @@ export interface WeaponContext {
 }
 
 /**
- * The active worm's weapon controls: pick a weapon, Tab to cycle the fuse, Space to fire
- * (hold to charge), Enter to drop the selected weapon while on the rope, and a click on the
- * map for the air strike. With `canFire` false (retreat time) only the rope still works.
+ * The active worm's weapon controls, WR's: pick a weapon, 1–5 to set a fuse, Tab (Toggle) to
+ * cycle the fuse or flip the air strike's direction, Space to fire (hold to charge), Enter
+ * (AltFire) to drop the selected weapon while on the rope, and a click on the map for the air
+ * strike. With `canFire` false (retreat time) only the rope still works.
  */
 export function useWeapons(worm: Worm, input: WormInput, ctx: WeaponContext, canFire = true): void {
   if (input.select) {
     worm.weapon = input.select;
     worm.charge = null;
   }
-  if (input.toggle && WEAPONS[worm.weapon].hasFuse) {
-    worm.fuse = FUSES[(FUSES.indexOf(worm.fuse) + 1) % FUSES.length];
-  }
+  const spec = WEAPONS[worm.weapon];
+  if (input.fuse !== null && spec.hasFuse && FUSES.includes(input.fuse)) worm.fuse = input.fuse;
+  if (input.toggle && spec.hasFuse) worm.fuse = FUSES[(FUSES.indexOf(worm.fuse) + 1) % FUSES.length];
+  else if (input.toggle && spec.use === 'strike') worm.strikeDir = worm.strikeDir === 1 ? -1 : 1;
 
-  // On the rope (or flying after letting go), Enter drops a weapon instead of jumping.
+  // On the rope (or flying after letting go), AltFire drops a weapon.
   const roping = worm.rope?.phase === 'attached' || worm.ropeChain;
-  if (canFire && input.jump && roping && WEAPONS[worm.weapon].droppable) drop(worm, ctx);
+  if (canFire && input.altFire && roping && spec.droppable) drop(worm, ctx);
 
   if (canFire && input.target !== null && WEAPONS[worm.weapon].use === 'strike' && worm.grounded && !worm.rope) {
     callStrike(worm, input.target, ctx);
@@ -347,7 +349,7 @@ function callStrike(worm: Worm, targetX: number, ctx: WeaponContext): void {
     const startY = -height - i * 6;
     // Start back along the flight line by however far it drifts on the way down.
     const lead = (vx * (ctx.surfaceY(x) - startY)) / vy;
-    ctx.spawn({ kind: 'missile', x: x - worm.facing * lead, y: startY, vx: worm.facing * vx, vy });
+    ctx.spawn({ kind: 'missile', x: x - worm.strikeDir * lead, y: startY, vx: worm.strikeDir * vx, vy });
   }
   ctx.weaponUsed(worm.weapon);
 }

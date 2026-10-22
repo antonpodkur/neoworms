@@ -48,22 +48,25 @@ Other scripts: `npm test` (simulation tests), `npm run typecheck`, `npm run buil
 
 ## Controls
 
+Worms Revolution's PC defaults.
+
 | Key | Action |
 |---|---|
 | ← → | walk |
 | ↑ ↓ | aim |
-| Enter | jump (tap twice quickly: backflip) |
+| Left Shift | jump (tap twice quickly: backflip) |
 | ← → in the air | steer the jump |
-| Backspace | backflip |
+| Backspace | backflip (an extra shortcut, not in WR) |
 | Space | fire the selected weapon (hold to charge the bazooka and thrown bombs) |
+| Right Shift / right click | weapon panel (arrows or mouse to choose, Space, Enter or click to pick) |
+| F1–F5 / F6–F10 | Quick Select: pick from a weapon row / utility row of the panel without opening it; press again for the next in the row |
+| 1–5 | fuse in seconds for the grenade, cluster and banana bombs |
+| Tab | Toggle: cycle the fuse, or flip the air strike's direction |
 | Click the map | call in the air strike there (with the Air Strike selected) |
-| Shift / right click | weapon panel (arrows or mouse to choose, Space, Enter or click to pick) |
-| F1–F5 / F6–F10 | Quick Select, as in Worms Revolution: pick from a weapon row / utility row of the panel without opening it; press again for the next in the row |
-| Tab | toggle: fuse 1–5 s for the grenade, cluster and banana bombs |
 | Space with the rope | shoot the rope / let go / shoot again mid-air |
 | ← → on rope | swing |
 | ↑ ↓ on rope | climb / descend |
-| Enter on rope | drop the selected grenade, cluster or banana bomb, dynamite or mine |
+| Enter on rope | AltFire: drop the selected grenade, cluster or banana bomb, dynamite or mine |
 | Mouse wheel | zoom |
 | Right drag / Alt + drag | pan |
 | Esc | menu: pause, resume, new match |

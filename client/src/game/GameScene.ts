@@ -91,7 +91,7 @@ export class GameScene extends Phaser.Scene {
   private hud!: Hud;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   /** Key presses waiting for the next simulation tick. */
-  private pressed = { jump: false, backflip: false, fire: false, toggle: false };
+  private pressed = noPresses();
   /** A weapon picked from the menu, waiting for the next simulation tick. */
   private picked: WeaponId | null = null;
   /** Where the map was clicked for an air strike, waiting for the next simulation tick. */
@@ -125,7 +125,7 @@ export class GameScene extends Phaser.Scene {
     this.settings = data.online?.settings ?? data.settings ?? loadSettings();
     this.autostart = !!data.online || (data.autostart ?? false);
     this.wormViews = new Map();
-    this.pressed = { jump: false, backflip: false, fire: false, toggle: false };
+    this.pressed = noPresses();
     this.picked = null;
     this.pickedTarget = null;
     this.accumulator = 0;
@@ -434,7 +434,7 @@ export class GameScene extends Phaser.Scene {
       select,
       target,
     };
-    this.pressed = { jump: false, backflip: false, fire: false, toggle: false };
+    this.pressed = noPresses();
     if (input.left || input.right || input.up || input.down) this.followActive = true;
     return input;
   }
@@ -473,7 +473,7 @@ export class GameScene extends Phaser.Scene {
           break;
         case 'turnStart': {
           this.weaponPanel.close();
-          this.pressed = { jump: false, backflip: false, fire: false, toggle: false };
+          this.pressed = noPresses();
           this.followActive = true;
           const turn = `${this.settings.teams[e.team]}'s turn`;
           // Sudden death starts in the same tick as the next turn; announce both together.
@@ -522,21 +522,33 @@ export class GameScene extends Phaser.Scene {
     const kb = this.input.keyboard!;
     this.cursors = kb.createCursorKeys();
     kb.addCapture(['ENTER', 'BACKSPACE', 'TAB', 'SPACE', 'SHIFT', ...QUICK_SELECT.map((q) => q.key)].join(','));
+    // WR's controls: Left Shift jumps (tap twice to flip), Space fires, Right Shift opens the
+    // weapon panel, Enter is AltFire (drop from the rope), Tab is Toggle, 1–5 set the fuse.
     this.setKeyboard(true);
     const onPress = (key: string, action: () => void) =>
       kb.on(`keydown-${key}`, (e: KeyboardEvent) => {
         if (!e.repeat) action();
       });
-    const press = (action: keyof typeof this.pressed) => () => {
+    const press = (action: 'jump' | 'backflip' | 'fire' | 'toggle' | 'altFire') => () => {
       this.pressed[action] = true;
       this.followActive = true;
     };
     const panel = this.weaponPanel;
-    onPress('ENTER', () => (panel.isOpen ? panel.choose() : press('jump')()));
+    onPress('ENTER', () => (panel.isOpen ? panel.choose() : press('altFire')()));
     onPress('SPACE', () => (panel.isOpen ? panel.choose() : press('fire')()));
     onPress('BACKSPACE', press('backflip'));
     onPress('TAB', press('toggle'));
-    onPress('SHIFT', () => this.toggleWeaponPanel());
+    // Phaser's SHIFT key doesn't tell left from right; the browser event does.
+    kb.on('keydown', (e: KeyboardEvent) => {
+      if (e.repeat) return;
+      if (e.code === 'ShiftLeft') press('jump')();
+      else if (e.code === 'ShiftRight') this.toggleWeaponPanel();
+    });
+    (['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE'] as const).forEach((key, i) =>
+      onPress(key, () => {
+        this.pressed.fuse = i + 1;
+      }),
+    );
     onPress('ESC', () => (panel.isOpen ? panel.close() : this.openSetup()));
     const arrows = [['LEFT', -1, 0], ['RIGHT', 1, 0], ['UP', 0, -1], ['DOWN', 0, 1]] as const;
     for (const [key, dx, dy] of arrows) onPress(key, () => panel.isOpen && panel.move(dx, dy));
@@ -682,9 +694,9 @@ export class GameScene extends Phaser.Scene {
     g.lineBetween(x + 5, y, x + 15, y);
     g.lineBetween(x, y - 15, x, y - 5);
     for (let i = 1; i <= 3; i++) {
-      const ax = x - worm.facing * (20 + i * 14);
+      const ax = x - worm.strikeDir * (20 + i * 14);
       const ay = y - 40 - i * 34;
-      g.lineBetween(ax, ay, ax + worm.facing * 8, ay + 18);
+      g.lineBetween(ax, ay, ax + worm.strikeDir * 8, ay + 18);
     }
   }
 
@@ -715,6 +727,11 @@ export class GameScene extends Phaser.Scene {
     );
     this.hud.setWind(this.world.wind);
   }
+}
+
+/** Key presses waiting for the next simulation tick. */
+function noPresses() {
+  return { jump: false, backflip: false, fire: false, toggle: false, altFire: false, fuse: null as number | null };
 }
 
 function weaponLabel(worm: Worm, status: WeaponStatus): string {

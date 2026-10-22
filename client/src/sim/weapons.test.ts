@@ -123,6 +123,15 @@ describe('Bazooka', () => {
 });
 
 describe('Grenade', () => {
+  it('takes a fuse from the number keys', () => {
+    const world = groundWorld();
+    const worm = standingWorm(world, 200, 'grenade');
+    run(world, 1, { fuse: 5 });
+    expect(worm.fuse).toBe(5);
+    run(world, 1, { fuse: 1 });
+    expect(worm.fuse).toBe(1);
+  });
+
   it('cycles its fuse with Tab', () => {
     const world = groundWorld();
     const worm = standingWorm(world, 200, 'grenade');
@@ -206,16 +215,16 @@ describe('Weapons on the rope', () => {
     return { world, worm };
   }
 
-  it('Enter drops the selected grenade and the rope stays on', () => {
+  it('AltFire (Enter) drops the selected grenade and the rope stays on', () => {
     const { world, worm } = hanging('grenade');
-    run(world, 1, { jump: true });
+    run(world, 1, { altFire: true });
     expect(world.projectiles).toMatchObject([{ kind: 'grenade' }]);
     expect(worm.rope?.phase).toBe('attached');
   });
 
-  it('Enter does nothing with a weapon that can\'t be dropped', () => {
+  it('AltFire does nothing with a weapon that can\'t be dropped', () => {
     const { world, worm } = hanging('bazooka');
-    run(world, 1, { jump: true });
+    run(world, 1, { altFire: true });
     expect(world.projectiles).toHaveLength(0);
     expect(worm.rope?.phase).toBe('attached');
   });
@@ -326,6 +335,15 @@ describe('Cluster and banana bombs', () => {
 });
 
 describe('Air strike', () => {
+  it('comes in from the other side after Tab', () => {
+    const world = groundWorld();
+    const worm = standingWorm(world, 200, 'airstrike');
+    run(world, 1, { toggle: true });
+    expect(worm.strikeDir).toBe(-1);
+    run(world, 1, { target: 800 });
+    expect(world.projectiles.every((p) => p.vx < 0)).toBe(true);
+  });
+
   it('drops five missiles in a row around the clicked spot', () => {
     const world = groundWorld();
     standingWorm(world, 200, 'airstrike');
